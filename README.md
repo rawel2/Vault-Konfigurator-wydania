@@ -40,3 +40,5 @@ Full manual: **`VAULT_manual_EN.pdf`** in the release. Update: run `instaluj.bat
 - Autorzy programu / Program authors: **rawel2** i/and **Claude** (Anthropic).
 - System VAULT, projekt, pliki STL i instrukcje PDF / design, STL files and PDF manuals: **© USSA Design**.
 - Program nieoficjalny, niepowiązany z USSA Design. / Unofficial tool, not affiliated with USSA Design.
+- Udostępniane za zgodą USSA Design (październik 2026); USSA Design nie odpowiada za program ani go nie wspiera.
+  / Shared with the permission of USSA Design (October 2026); USSA Design is not responsible for the program and does not support it.
