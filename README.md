@@ -12,7 +12,7 @@ To repozytorium zawiera tylko gotowe wydania.
 
 ## Instalacja
 
-1. Pobierz `instaluj.bat` z [najnowszego wydania](../../releases/latest).
+1. Pobierz `instaluj.bat` z [najnowszego wydania](../../releases/latest). (`install.bat` – wersja angielska)
 2. Uruchom go. Jeśli Windows pokaże „System Windows ochronił ten komputer”, kliknij *Więcej informacji* → *Uruchom mimo to*.
    Instalator sprawdzi Pythona (w razie braku zaproponuje instalację), pobierze program, zainstaluje numpy,
    utworzy skrót „Konfigurator VAULT” na pulpicie i uruchomi konfigurator.
@@ -27,13 +27,13 @@ A configurator for VAULT storage towers: STL file list with quantities, hardware
 
 ## Installation
 
-1. Download `instaluj.bat` from the [latest release](../../releases/latest).
+1. Download `install.bat` (English installer) from the [latest release](../../releases/latest).
 2. Run it. If Windows shows “Windows protected your PC”, click *More info* → *Run anyway*.
    It checks Python (offers to install it), downloads the program, installs numpy, creates the
-   "Konfigurator VAULT" desktop shortcut and starts the configurator.
+   "VAULT Configurator" desktop shortcut and starts the configurator.
 3. In the "VAULT STL files" window, point to the folder with the unpacked VAULT files.
 
-Full manual: **`VAULT_manual_EN.pdf`** in the release. Update: run `instaluj.bat` again – your settings are kept.
+Full manual: **`VAULT_manual_EN.pdf`** in the release. Update: run `install.bat` again – your settings are kept.
 
 ## Autorzy / Authors
 
