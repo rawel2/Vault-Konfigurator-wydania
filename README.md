@@ -12,7 +12,7 @@ To repozytorium zawiera tylko gotowe wydania.
 
 ## Instalacja
 
-1. Pobierz `instaluj.bat` z [najnowszego wydania](../../releases/latest). (`install.bat` – wersja angielska)
+1. Pobierz `instaluj.bat` z [najnowszego wydania](../../releases/latest) (`install.bat` to wersja angielska).
 2. Uruchom go. Jeśli Windows pokaże „System Windows ochronił ten komputer”, kliknij *Więcej informacji* → *Uruchom mimo to*.
    Instalator sprawdzi Pythona (w razie braku zaproponuje instalację), pobierze program, zainstaluje numpy,
    utworzy skrót „Konfigurator VAULT” na pulpicie i uruchomi konfigurator.
