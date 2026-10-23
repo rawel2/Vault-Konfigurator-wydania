@@ -72,6 +72,14 @@ them, type the folder path.
 
 Full manual: **`VAULT_manual_EN.pdf`** in the release. Update: run the installer again – your settings are kept.
 
+## Projekty społeczności / Community projects
+
+- **Docker** – obraz od DocBiga, sam pobiera najnowsze wydanie (z niemieckim tłumaczeniem, także od DocBiga)
+  / image by DocBig that pulls the latest release by itself (including the German translation, also by DocBig):
+  https://github.com/DocBigs-Lab/vault-konfigurator-docker
+  Serwer nie ma logowania – udostępniaj go tylko w zaufanej sieci (`VAULT_BIND`, `VAULT_HOSTS`).
+  / The server has no login – share it only on a trusted network (`VAULT_BIND`, `VAULT_HOSTS`).
+
 ## Autorzy / Authors
 
 - Autorzy programu / Program authors: **rawel2** i/and **Claude** (Anthropic).
