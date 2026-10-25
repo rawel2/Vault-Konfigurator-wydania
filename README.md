@@ -72,6 +72,14 @@ them, type the folder path.
 
 Full manual: **`VAULT_manual_EN.pdf`** in the release. Update: run the installer again – your settings are kept.
 
+## Narzędzia / Tools
+
+- **VAULT STL repair** – naprawia za jednym razem błędy siatek całej biblioteki STL tą samą usługą Windows, której
+  Bambu Studio używa w „Napraw model”, i zapisuje naprawioną kopię biblioteki (koniec pytań o naprawę przy każdym wczytaniu)
+  / repairs the mesh errors of the whole STL library in one go with the same Windows service Bambu Studio uses for
+  "Repair model" and writes a repaired copy of the library (no more repair prompts on every load):
+  https://github.com/rawel2/vault-stl-repair (Windows 10/11, Python).
+
 ## Projekty społeczności / Community projects
 
 - **Docker** – obraz od DocBiga, sam pobiera najnowsze wydanie (z niemieckim tłumaczeniem, także od DocBiga)
