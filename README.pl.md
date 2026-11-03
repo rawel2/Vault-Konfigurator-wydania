@@ -6,8 +6,9 @@
 > Ten program **nie zawiera plików STL** – trzeba je **kupić u producenta**: https://www.ussadesign.com/pages/vault
 
 Program do konfiguracji wież z pojemników VAULT: lista plików STL z ilościami, elementy niedrukowane, szacunek czasu
-i filamentu, płyty 3MF dla drukarki i wizualizacja 3D. Działa lokalnie na Windows, macOS i Linuxie, bez internetu.
-Język programu zmienia się u góry strony (Polski, English, Deutsch). To repozytorium zawiera tylko gotowe wydania.
+i filamentu, płyty 3MF dla drukarki i wizualizacja 3D, a do tego pojemniki gridfinity i etykiety frontów z napisem
+i symbolami. Działa lokalnie na Windows, macOS i Linuxie, bez internetu. Język programu zmienia się w Ustawieniach
+(prawy górny róg): Polski, English, Deutsch, Français, Español, 中文. To repozytorium zawiera tylko gotowe wydania.
 
 ## Instalacja
 

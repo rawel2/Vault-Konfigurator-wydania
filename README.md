@@ -6,8 +6,9 @@
 > This program **does not include the STL files** – you have to **buy them from the maker**: https://www.ussadesign.com/pages/vault
 
 A configurator for VAULT storage towers: STL file list with quantities, hardware, print time and filament estimate,
-3MF plates and a 3D view. Runs locally on Windows, macOS and Linux, offline. The program language can be switched
-at the top of the page (English, Polski, Deutsch). This repository holds only the releases.
+3MF plates and a 3D view, plus gridfinity bins and front labels with text and symbols. Runs locally on Windows, macOS
+and Linux, offline. The program language is switched in Settings (top right): English, Polski, Deutsch, Français,
+Español, 中文. This repository holds only the releases.
 
 ## Installation
 
