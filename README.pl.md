@@ -10,6 +10,13 @@ i filamentu, płyty 3MF dla drukarki i wizualizacja 3D, a do tego pojemniki grid
 i symbolami. Działa lokalnie na Windows, macOS i Linuxie, bez internetu. Język programu zmienia się w Ustawieniach
 (prawy górny róg): Polski, English, Deutsch, Français, Español, 中文. To repozytorium zawiera tylko gotowe wydania.
 
+## Wypróbuj online
+
+**https://rawel2.github.io/Vault-Konfigurator-wydania/** – podgląd w przeglądarce, bez instalacji: zaplanujesz wieżę
+i dostaniesz listę części i śrub, szacunek druku, kreator, przegródki szuflad i kroki składania. Projekt zapisuje się
+w Twojej przeglądarce. Kształty z plików STL, pojemniki gridfinity, etykiety z napisem, logo i płyty 3MF potrzebują
+Twoich plików VAULT, więc działają tylko w programie do pobrania (niżej).
+
 ## Instalacja
 
 ### Windows

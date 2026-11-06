@@ -10,6 +10,13 @@ A configurator for VAULT storage towers: STL file list with quantities, hardware
 and Linux, offline. The program language is switched in Settings (top right): English, Polski, Deutsch, Français,
 Español, 中文. This repository holds only the releases.
 
+## Try it online
+
+**https://rawel2.github.io/Vault-Konfigurator-wydania/** – a preview in the browser, nothing to install: plan a tower
+and get the parts and hardware lists, print estimates, the wizard, drawer dividers and the assembly steps. The project
+is saved in your browser. Shapes from the STL files, gridfinity bins, labels with text, the logo and 3MF plates need
+your VAULT files, so they work only in the downloadable program below.
+
 ## Installation
 
 ### Windows
