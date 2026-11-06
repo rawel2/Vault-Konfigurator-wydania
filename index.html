@@ -1,0 +1,2379 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Konfigurator VAULT</title>
+<style>
+:root {
+  --bg: #f4f4f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #dcdcd6;
+  --accent: #e8662b; --accent-ink: #ffffff; --drawer: #c9ccd1; --sust: #9fb3a4; --warn: #b3261e; --warn-bg: #fbe9e7;
+  --chip: #eeeeea; color-scheme: light;
+}
+/* ciemny motyw: data-theme ustawia applyTheme() (wybór w nagłówku: automatycznie = jak system, jasny, ciemny) */
+:root[data-theme=dark] { --bg: #161615; --panel: #212120; --ink: #ececea; --muted: #a0a09a; --line: #3a3a37;
+  --drawer: #5d636b; --sust: #4f6a57; --warn: #ff8a80; --warn-bg: #3a1f1d; --chip: #2c2c2a; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.4 system-ui, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+header { padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+header .hdr { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+header h1 { font-size: 18px; margin: 0; letter-spacing: .5px; }
+header .ver { font-size: 13px; font-weight: normal; color: var(--muted); letter-spacing: 0; }
+header .opts { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; align-items: center; }
+/* menu „Projekt” w nagłówku (details/summary – działa bez skryptu, skrypt tylko zamyka po kliknięciu obok) */
+details.menu { position: relative; }
+details.menu > summary { list-style: none; border: 1px solid var(--line); background: var(--chip); border-radius: 6px; padding: 4px 10px; cursor: pointer; user-select: none; }
+details.menu > summary::-webkit-details-marker { display: none; }
+details.menu > summary::after { content: " ▾"; color: var(--muted); }
+details.menu > summary:hover, details.menu[open] > summary { border-color: var(--accent); }
+.menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; display: flex; flex-direction: column; gap: 4px; min-width: 180px;
+  padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
+.menu-list button { text-align: left; }
+/* panel „Ustawienia” wysuwany z prawej: język, motyw, opcje części i szacunku, biblioteka plików, instrukcje */
+.drawer-overlay { position: fixed; inset: 0; z-index: 35; background: color-mix(in srgb, var(--bg) 55%, transparent); }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 36; width: min(440px, 100%); overflow: auto; padding: 12px 16px 24px;
+  background: var(--panel); border-left: 1px solid var(--line); box-shadow: -8px 0 30px rgba(0, 0, 0, .2); }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.drawer-head h2 { margin: 0; }
+.drawer .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; white-space: normal; }
+.drawer .field select { max-width: 60%; }
+progress.job { display: block; width: 100%; max-width: 520px; height: 14px; margin: 4px 0 8px; accent-color: var(--drawer); }
+main { display: grid; grid-template-columns: 220px minmax(380px, 1fr) minmax(420px, 1.2fr); gap: 12px; padding: 12px; }
+/* lewy pasek (zestawy, dodatkowe pliki) zwijany przyciskiem – state.sideOff, zapisywane z projektem */
+main.side-off { grid-template-columns: 38px minmax(380px, 1fr) minmax(420px, 1.4fr); }
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 10px; }
+.side-head h2 { margin: 0; }
+main.side-off #side { padding: 6px 4px; align-self: start; }
+main.side-off #side > :not(.side-head), main.side-off .side-head h2 { display: none; }
+main.side-off .side-head { justify-content: center; margin: 0; }
+@media (max-width: 1200px) { main, main.side-off { grid-template-columns: 1fr; } }
+section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+h3 { font-size: 13px; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+button { font: inherit; border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.small { padding: 1px 7px; font-size: 12px; }
+/* fokus z klawiatury (Tab) – wyraźna obwódka w kolorze akcentu; kliknięcie myszą jej nie pokazuje */
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px; }
+select, input[type=number], input[type=text], input[type=search] { font: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; background: var(--panel); color: var(--ink); }
+input[type=number] { width: 58px; }
+label { white-space: nowrap; }
+.stack-list { list-style: none; padding: 0; margin: 0 0 10px; }
+.stack-list li { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+.stack-list li.active { border-color: var(--accent); background: var(--chip); }
+.stack-list .meta { color: var(--muted); font-size: 12px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.layer { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+.layer.top { border-color: var(--accent); }
+.layer-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.layer-head .idx { font-weight: 600; min-width: 64px; }
+.layer-head .tools { margin-left: auto; display: flex; gap: 4px; }
+.cols { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.col { flex: 1; min-width: 150px; background: var(--chip); border-radius: 6px; padding: 6px 8px; }
+.col .fam { font-weight: 600; margin-bottom: 4px; }
+.col .row { margin-bottom: 4px; gap: 6px; }
+.preview { position: relative; display: flex; flex-direction: column-reverse; align-items: center; gap: 9px; padding: 18px 10px 10px; background: var(--chip); border-radius: 8px; margin-bottom: 10px; }
+.viz-open { position: absolute; top: 6px; right: 6px; }
+/* okno pierwszego uruchomienia: folder z plikami STL */
+.setup-overlay { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: color-mix(in srgb, var(--bg) 75%, transparent); backdrop-filter: blur(2px); }
+.setup { width: 100%; max-width: 640px; padding: 18px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
+.setup p { margin: 0 0 10px; }
+.setup-ussa a { color: var(--accent); font-weight: 600; }
+/* okno wizualizacji 3D (wizualizacja.js) */
+.viz-overlay { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: var(--bg); }
+.viz-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.viz-group { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.viz-bar button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.viz-bar input[type=color] { width: 30px; height: 24px; padding: 0 2px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); cursor: pointer; }
+.viz-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, var(--panel), var(--bg) 75%); }
+.viz-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.viz-labels { position: absolute; inset: 0; pointer-events: none; }
+.viz-label { position: absolute; transform: translate(-50%, -50%); padding: 1px 6px; font-size: 12px; white-space: nowrap; color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 85%, transparent); border: 1px solid var(--line); border-radius: 4px; }
+.viz-label.layer { transform: translate(-100%, -50%); }
+.viz-label.stack { transform: translate(-50%, -100%); font-weight: 600; }
+.viz-label.dim { color: var(--accent); font-weight: 600; border-color: var(--accent); }
+.viz-foot { margin: 0; padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); }
+.pv-layer { display: flex; gap: 4px; }
+.pv-mod { position: relative; display: flex; gap: 2px; padding: 3px; border: 2px solid var(--muted); border-radius: 6px; background: var(--panel); }
+.pv-mod.s { border-color: var(--sust); }
+.pv-tag { position: absolute; top: -9px; left: 6px; padding: 0 4px; font-size: 10px; line-height: 14px; font-weight: 600; color: var(--muted); background: var(--chip); border-radius: 3px; }
+.pv-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pv-box { display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink); border-radius: 3px; position: relative; }
+.pv-box.d { background: var(--drawer); }
+.pv-box.s { background: var(--sust); }
+.pv-box.d::after { content: ""; position: absolute; right: 12%; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); opacity: .55; }
+.pv-roof { height: 8px; background: var(--accent); border-radius: 3px 3px 0 0; opacity: .8; }
+.pv-base { height: 10px; background: var(--muted); border-radius: 0 0 3px 3px; }
+.hint { color: var(--muted); font-size: 12px; }
+.tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.tabs button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.tabs .tab-sep { width: 1px; align-self: stretch; margin: 2px 4px; background: var(--line); }
+.tabs button.tab-final:not(.on) { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.tabs button.tab-final::after { content: " ›"; }
+/* „Następny krok” na dole zakładek */
+.next-steps { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.next-steps .lbl { color: var(--muted); font-size: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); }
+td.q { text-align: right; font-weight: 600; white-space: nowrap; }
+td .path { color: var(--muted); font-size: 11px; }
+/* długie nazwy plików generowanych (etykiety z napisem, fronty z logo) łamią się w dowolnym miejscu – bez tego tabela
+   wychodziła poza kartę i ucinała kolumny „Do czego” i „Czas” (2026-11-06, przy zdjęciach na Discorda) */
+td.fname { overflow-wrap: anywhere; min-width: 170px; }
+td .used { color: var(--muted); font-size: 11px; }
+tr.missing td { color: var(--warn); background: var(--warn-bg); }
+tr.done td { opacity: .5; }
+.lab-wrap label { white-space: normal; }  /* długi opis przełącznika – zawijany, nie ucinany */
+.lab-list { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; max-height: 260px; overflow-y: auto; }
+.lab-item { display: flex; gap: 8px; align-items: center; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.lab-item.on { border-color: var(--accent); background: var(--panel); }
+.lab-item .lab-txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lab-item .lab-where { display: block; font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.lab-note { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; padding: 6px 8px; border: 1px solid var(--accent); border-radius: 4px; font-size: 12px; }
+.lab-text { width: 100%; box-sizing: border-box; font: inherit; }
+.lab-svg svg { max-width: 100%; height: auto; }
+.lab-picker { border: 1px solid var(--line); border-radius: 4px; padding: 6px; margin: 4px 0 8px; max-height: 360px; overflow-y: auto; }
+.lab-grp { font-size: 11px; color: var(--muted); margin: 6px 0 2px; }
+.lab-grid { display: flex; flex-wrap: wrap; gap: 3px; }
+.lab-pick { padding: 3px; line-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; color: var(--fg, inherit); }
+.lab-pick.on { border-color: var(--accent); outline: 2px solid var(--accent); }
+.lab-sym { display: inline-block; line-height: 0; }
+tr.done td.done-cell { opacity: 1; }
+td.done-cell { white-space: nowrap; }
+/* przegródki Grid Dividers: siatka otworów dna, przegródki (stopa, ścianka, części brzegowe), łuki (SVG) */
+.gd-svg { position: absolute; inset: 0; pointer-events: none; }
+.gd-svg svg { overflow: visible; }
+.gd-svg path { fill: none; stroke-linecap: butt; }
+.gd-svg path.foot { stroke: color-mix(in srgb, var(--accent) 18%, transparent); }
+.gd-svg path.wall { stroke: color-mix(in srgb, var(--accent) 75%, var(--panel)); pointer-events: stroke; cursor: pointer; }
+.gd-svg path.wall.sel { stroke: var(--accent); }
+.gd-svg path.bad.wall { stroke: var(--warn); }
+.gd-svg path.pick.wall { stroke: var(--accent); stroke-dasharray: 4 3; pointer-events: none; }
+.gd-svg path.pick.foot { pointer-events: none; }
+.row.ins-k { padding-left: 10px; }
+.gd-wrap { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.gd-side { flex: 1 1 220px; min-width: 0; }
+.gd-parts { margin: 4px 0; padding-left: 18px; }
+.gd-grid { position: relative; box-sizing: content-box; border: 3px solid var(--line); border-radius: 6px; background: var(--chip);
+  touch-action: none; user-select: none; cursor: crosshair; }
+.gd-hole { position: absolute; border-radius: 50%; background: color-mix(in srgb, var(--ink) 35%, transparent); pointer-events: none; }
+.gd-hole.pin { background: var(--accent); }
+.gd-bar { position: absolute; box-sizing: border-box; border-radius: 3px; pointer-events: none; }
+.gd-bar.foot { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.gd-bar.wall { background: color-mix(in srgb, var(--accent) 75%, var(--panel)); pointer-events: auto; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--ink); overflow: hidden; }
+.gd-bar.edge { background: color-mix(in srgb, var(--accent) 40%, var(--panel)); }
+.gd-bar.cap { border-radius: 8px; }
+.gd-bar.wall.short { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--accent) 75%, var(--panel)) 0 4px, color-mix(in srgb, var(--accent) 50%, var(--panel)) 4px 8px); }
+.gd-bar.sel.wall { background: var(--accent); color: var(--accent-ink); outline: 2px solid var(--ink); }
+.gd-bar.bad.wall { background: var(--warn-bg); color: var(--warn); outline: 2px solid var(--warn); }
+.gd-bar.bad.foot { background: color-mix(in srgb, var(--warn) 15%, transparent); }
+.gd-bar.pick { border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 25%, transparent); pointer-events: none; }
+td.plates { white-space: nowrap; font-variant-numeric: tabular-nums; cursor: help; }
+td.plates.stale { color: var(--warn); }
+td.done-cell input { width: 48px; }
+td.done-cell button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.done-sum { margin-top: 6px; align-items: center; }
+.done-sum progress { width: 140px; }
+.asm-stack h4 { margin: 14px 0 6px; }
+ol.asm { margin: 0; padding-left: 22px; }
+.asm-step { margin-bottom: 10px; }
+.asm-step.done .asm-parts, .asm-step.done .asm-title { opacity: .5; }
+.asm-title { font-weight: 600; cursor: pointer; white-space: normal; }
+.asm-parts { margin: 3px 0 0; padding-left: 18px; font-size: 13px; overflow-wrap: anywhere; }
+.asm-parts li { margin: 1px 0; }
+.asm-parts li.missing { color: var(--warn); }
+.asm-parts li.hw { color: var(--muted); }
+.asm-file { font-size: 11px; }
+.asm-parts .refs { display: inline; margin-left: 8px; }
+.asm-parts .refs a { margin-right: 8px; white-space: nowrap; }
+.fil { margin-top: 6px; gap: 4px 10px; font-size: 13px; }
+.fil-chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; }
+.fil-chip .sw { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--line); }
+tr.grp td { background: var(--chip); font-weight: 600; }
+.note { color: var(--warn); font-size: 11px; }
+.refs { font-size: 11px; display: flex; flex-wrap: wrap; gap: 0 8px; }
+.refs a { color: var(--accent); }
+/* wynik bez własnego paska przewijania (od 1.1.29, prośba użytkownika) – przewija się cała strona, nagłówek tabeli
+   (th position: sticky) trzyma się górnej krawędzi okna */
+.tablewrap { overflow: visible; }
+/* pojemniki gridfinity: formularz obok podglądu, wąsko – jeden pod drugim */
+.bin-wrap { display: grid; grid-template-columns: minmax(300px, 360px) 1fr; gap: 14px; align-items: start; }
+/* wąski ekran (telefon, 375 px – 2026-11-04): kolumny zakładek się zwężają, długie opisy pól się zawijają, a tabele
+   list części przewijają się w poziomie we własnym polu (bez przyklejonego nagłówka) zamiast rozpychać stronę */
+.bin-wrap > * { min-width: 0; }
+@media (max-width: 760px) {
+  main > * { min-width: 0; }  /* bez tego najszersza tabela rozpycha kolumnę siatki strony */
+  .bin-wrap { grid-template-columns: minmax(0, 1fr); }
+  .tscroll { overflow-x: auto; }  /* na komputerze bez przewijania – nagłówek tabeli przykleja się u góry okna */
+  .tscroll > table { min-width: 620px; }
+  #result label { white-space: normal; }
+  #result select, #result input[type=text], #result textarea { max-width: 100%; }
+}
+.bin-form h3 { margin: 10px 0 4px; }
+.bin-form h3:first-child { margin-top: 0; }
+.bin-form > label { display: block; margin: 4px 0; white-space: normal; }
+.bin-row { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; }
+.bin-row input { width: 70px; }
+.bin-row select { min-width: 0; flex: 0 1 auto; }  /* długie opcje (styl napisu) zwężają się na telefonie */
+.bin-view { position: relative; min-width: 0; }
+.bin-canvas { width: 100%; height: 380px; display: block; cursor: grab; touch-action: none; border-radius: 6px;
+  background: radial-gradient(ellipse at 50% 30%, var(--panel), var(--bg) 75%); }
+.bin-info { margin-top: 6px; font-size: 13px; }
+.bin-left > * + * { margin-top: 8px; }
+.bin-sets select { max-width: 120px; }
+.bin-target .row { gap: 4px; }
+.bin-choose { display: block; width: 100%; white-space: normal; }
+.bin-target label { white-space: normal; }
+.bin-choose select { display: block; width: 100%; max-width: 100%; margin-top: 2px; }
+/* siatka płyty: kratki, pojemniki (przeciąganie tworzy nowy), ramka zaznaczenia */
+.bin-gridwrap { display: flex; flex-direction: column; align-items: center; gap: 2px; overflow-x: auto; }
+.bin-grid { position: relative; box-sizing: content-box; border: 2px solid var(--line); border-radius: 4px; background: var(--chip);
+  touch-action: none; user-select: none; cursor: crosshair; }
+.bin-cell { position: absolute; box-sizing: border-box; border: 1px dashed var(--line); }
+.bin-cell.blocked { background: repeating-linear-gradient(45deg, var(--line) 0 3px, transparent 3px 8px); border-style: solid; }
+.bin-item { position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 11px;
+  border-radius: 4px; background: color-mix(in srgb, var(--accent) 55%, var(--panel)); color: var(--ink); cursor: pointer; overflow: hidden; }
+.bin-item.sel { background: var(--accent); color: var(--accent-ink); outline: 2px solid var(--ink); }
+.bin-item.bad { background: var(--warn-bg); color: var(--warn); outline: 2px solid var(--warn); }
+.bin-pick { position: absolute; box-sizing: border-box; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent);
+  display: flex; align-items: center; justify-content: center; font-size: 11px; pointer-events: none; }
+.bin-pick.bad { border-color: var(--warn); background: var(--warn-bg); }
+a { color: inherit; }
+.summary { margin-bottom: 8px; }
+.extras-search { max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; margin: 6px 0; }
+.extras-search div { padding: 2px 6px; display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.extras-search div:hover { background: var(--chip); }
+fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin: 0 0 8px; }
+legend { color: var(--muted); font-size: 12px; }
+.err { color: var(--warn); font-weight: 600; }
+/* pasek „dostępna nowa wersja” (aktualizacja.py) */
+.upd { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 12px 12px 0; padding: 8px 12px;
+  background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; }
+.upd .notes { flex-basis: 100%; margin: 0; white-space: pre-wrap; font-family: inherit; font-size: 12px; color: var(--muted); }
+/* Cofnij / Ponów w nagłówku i komunikat po usunięciu (toast) */
+.hist { display: inline-flex; gap: 2px; }
+.hist button { padding: 2px 9px; font-size: 15px; line-height: 1.2; }
+.hist button:disabled, button:disabled { opacity: .45; cursor: default; }
+.hist button:disabled:hover, button:disabled:hover { border-color: var(--line); }
+.toast { position: fixed; left: 16px; bottom: 16px; z-index: 60; display: flex; gap: 12px; align-items: center; max-width: calc(100% - 32px);
+  padding: 8px 12px; background: var(--ink); color: var(--panel); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+.toast[hidden] { display: none; }
+/* miniatura części po najechaniu na nazwę pliku (wizualizacja.js, THUMB) */
+.thumb-tip { position: fixed; z-index: 70; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .22); pointer-events: none; text-align: center; }
+.thumb-tip[hidden], .thumb-tip img[hidden] { display: none; }
+.thumb-tip img { display: block; width: 240px; max-width: calc(100vw - 30px); height: auto; aspect-ratio: 4 / 3; }
+.thumb-tip .hint { min-width: 120px; padding: 2px 4px 0; }
+.toast button { background: transparent; color: var(--panel); border-color: color-mix(in srgb, var(--panel) 50%, transparent); font-weight: 600; }
+/* podpowiedź „?” (help()): dymek po najechaniu, kliknięciu albo Tab; .left – dymek w lewo przy prawej krawędzi okna */
+.help { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin: 0 2px 0 4px; vertical-align: 1px;
+  border: 1px solid var(--muted); border-radius: 50%; color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1; cursor: help;
+  position: relative; text-transform: none; letter-spacing: 0; flex: none; }
+.lab { white-space: nowrap; }
+.help:hover, .help:focus, .help.open { border-color: var(--accent); color: var(--accent); outline: none; }
+.help:hover::after, .help:focus::after, .help.open::after { content: attr(data-tip); position: absolute; left: -10px; top: calc(100% + 6px); z-index: 70;
+  width: max-content; max-width: min(300px, 80vw); white-space: normal; padding: 7px 9px; border-radius: 6px; background: var(--ink); color: var(--panel);
+  font-size: 12px; font-weight: normal; line-height: 1.4; text-align: left; box-shadow: 0 6px 18px rgba(0, 0, 0, .25); pointer-events: none; }
+.help.left:hover::after, .help.left:focus::after, .help.left.open::after { left: auto; right: -10px; }
+/* uwagi do projektu (issuesBox) */
+details.issues { margin-top: 6px; color: var(--warn); }
+details.issues summary { cursor: pointer; font-weight: 600; }
+details.issues ul { margin: 4px 0 0; padding-left: 18px; color: var(--ink); }
+details.issues li { margin-bottom: 3px; }
+/* panel „Pomoc” */
+.help-steps { margin: 4px 0 8px; padding-left: 20px; }
+.help-steps li { margin-bottom: 8px; }
+.help-steps button { margin-left: 4px; }
+.help-list { margin: 4px 0 8px; padding-left: 18px; }
+.help-list li { margin-bottom: 4px; }
+kbd { display: inline-block; padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--chip); font: 12px/1.5 inherit; }
+/* karta powitalna i kreator wieży (kreator.js) */
+.welcome { margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 8px; background: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
+.welcome p { margin: 4px 0 8px; }
+.wiz-overlay { position: fixed; inset: 0; z-index: 45; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(2px); }
+.wiz { display: flex; flex-direction: column; width: 100%; max-width: 1040px; max-height: calc(100vh - 32px); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 16px 48px rgba(0, 0, 0, .3); }
+.wiz-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px 0; }
+.wiz-head h2 { margin: 0; }
+.wiz-steps { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 10px 16px 0; padding: 0 0 10px; border-bottom: 1px solid var(--line); }
+.wiz-steps button { border-color: transparent; background: transparent; color: var(--muted); }
+.wiz-steps .n { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: 50%; background: var(--chip); color: var(--muted); font-size: 12px; font-weight: 600; }
+.wiz-steps li.done .n { background: color-mix(in srgb, var(--accent) 25%, var(--panel)); color: var(--ink); }
+.wiz-steps li.on button { color: var(--ink); font-weight: 600; }
+.wiz-steps li.on .n { background: var(--accent); color: var(--accent-ink); }
+.wiz-main { display: grid; grid-template-columns: 1fr 300px; gap: 16px; padding: 4px 16px 12px; overflow: auto; min-height: 0; }
+@media (max-width: 760px) { .wiz-main { grid-template-columns: 1fr; } }
+.wiz-body h3:first-child { margin-top: 10px; }
+.wiz-side { align-self: start; position: sticky; top: 0; padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.wiz-side .preview { margin: 0; }
+.wiz-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.wiz-cards.wide { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.wiz-card { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left; padding: 8px 10px; background: var(--panel); border-radius: 8px; white-space: normal; }
+.wiz-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+/* miniatura szablonu: podgląd wieży zmniejszony (krRender) do stałej wysokości, wieża stoi na dole */
+.wiz-mini { align-self: stretch; height: 124px; margin-top: 4px; display: flex; justify-content: center; align-items: flex-end; overflow: hidden; pointer-events: none; }
+.wiz-mini .preview { flex: none; margin: 0; padding: 14px 6px 6px; transform-origin: bottom center; }
+.wiz-layers { display: flex; flex-direction: column-reverse; gap: 6px; margin-bottom: 8px; }
+.wiz-layer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--chip); }
+.wiz-layer .idx { font-weight: 600; min-width: 18px; color: var(--muted); }
+.wiz-layer .tools { margin-left: auto; display: flex; gap: 4px; }
+.wiz-add { gap: 4px 6px; }
+.wiz-sum { margin: 4px 0 8px; padding-left: 22px; }
+.wiz-foot { display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); }
+.foot { padding: 0 16px 16px; color: var(--muted); font-size: 12px; }
+.foot a { color: var(--accent); }
+td.est { text-align: right; white-space: nowrap; font-size: 12px; }
+span.est.ussa::before, td.est.ussa > div:first-child::before, td.est.calc > div:first-child::before { content: "● "; color: var(--accent); }
+span.est.geom::before, td.est.geom > div:first-child::before { content: "○ "; color: var(--muted); }
+td.est.geom { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <!-- jeden wiersz: nazwa z wersją, menu Projekt i Ustawienia (od 1.1.29, zgłoszenie nr 9 – wcześniej dwa wiersze opcji) -->
+  <div class="hdr">
+    <h1><span data-tr>VAULT · konfigurator</span> <span id="hdrVer" class="ver"></span></h1>
+    <div class="opts">
+      <span class="hist">
+        <button id="btnUndo" data-tr-title="Cofnij (Ctrl+Z)" disabled><span aria-hidden="true">↶</span></button>
+        <button id="btnRedo" data-tr-title="Ponów (Ctrl+Y)" disabled><span aria-hidden="true">↷</span></button>
+      </span>
+      <details class="menu" id="projMenu">
+        <summary data-tr>Projekt</summary>
+        <div class="menu-list">
+          <button id="btnNew" data-tr>Nowy projekt</button>
+          <button id="btnSave" data-tr>Zapisz projekt</button>
+          <button id="btnLoad" data-tr>Wczytaj projekt</button>
+        </div>
+      </details>
+      <input type="file" id="fileLoad" accept=".json" hidden>
+      <button id="btnHelp"><span aria-hidden="true">?</span> <span data-tr>Pomoc</span></button>
+      <button id="btnSettings"><span aria-hidden="true">⚙</span> <span data-tr>Ustawienia</span></button>
+    </div>
+  </div>
+</header>
+<div id="setOverlay" class="drawer-overlay" hidden></div>
+<aside id="settings" class="drawer" hidden aria-labelledby="setTitle">
+  <div class="drawer-head">
+    <h2 id="setTitle" data-tr>Ustawienia</h2>
+    <button id="btnSetClose" class="small" data-tr-title="Zamknij"><span aria-hidden="true">✕</span></button>
+  </div>
+  <h3 data-tr>Wygląd</h3>
+  <label class="field"><span data-tr>Język:</span>
+    <select id="optLang"><option value="auto" data-tr>automatycznie</option><option value="pl">Polski</option><option value="en">English</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="es">Español</option><option value="zh">中文</option></select>
+  </label>
+  <label class="field"><span data-tr>Motyw:</span>
+    <select id="optTheme"><option value="auto" data-tr>automatycznie</option><option value="light" data-tr>jasny</option><option value="dark" data-tr>ciemny</option></select>
+  </label>
+  <h3 data-tr>Części i szacunek</h3>
+  <label class="field"><span><span data-tr>Kluczyk:</span><span class="help" tabindex="0" role="img" data-tr-tip="Zwykły – kluczyk z płetwą i nakładką; ukryty – płaski, równy z frontem, z wyjmowanym kluczem.">?</span></span>
+    <select id="optKey"><option value="normal" data-tr>zwykły + nakładka</option><option value="hidden" data-tr>ukryty (Hidden Key)</option></select>
+  </label>
+  <label class="field" id="optKeyPrintRow" data-tr-title="Hidden Key Part 2 to wyjmowana rączka do obracania ukrytych zamków – pasuje do wszystkich szuflad, więc wystarczy jedna na projekt."><input type="checkbox" id="optKeyPrint"> <span data-tr>drukuj klucz (jeden na projekt)</span></label>
+  <label class="field"><span><span data-tr>Listwy zębate (Geared Rails):</span><span class="help" tabindex="0" role="img" data-tr-tip="Listwy zębate łączą prowadnice po obu stronach, żeby szuflada nie przekrzywiała się przy wysuwaniu. Zalecane, gdy w module jest kilka szuflad.">?</span></span>
+    <select id="optRails">
+      <option value="always" data-tr>w każdej szufladzie</option>
+      <option value="auto" data-tr>gdy kilka szuflad w module</option>
+      <option value="never" data-tr>nigdy</option>
+    </select>
+  </label>
+  <label class="field" data-tr-title="Wyłącz, jeśli etykiet nie drukujesz albo robisz je w zakładce „Etykiety” (te zostają na liście)."><input type="checkbox" id="optLabels"> <span data-tr>puste etykiety (Label) na liście części</span></label>
+  <label class="field" data-tr-title="1.0 = Bambu Lab H2S, basic settings (wg arkusza USSA). Wolniejsza drukarka/profil → większa wartość."><span data-tr>Mnożnik czasu:</span>
+    <input type="number" id="optSpeed" min="0.2" max="5" step="0.1" style="width:64px">
+  </label>
+  <label class="field"><span data-tr>Filament zł/kg:</span> <input type="number" id="optPrice" min="0" step="5" style="width:64px"></label>
+  <h3 data-tr>Biblioteka plików</h3>
+  <div id="libBox"></div>
+  <h3 data-tr>Instrukcje</h3>
+  <div id="docsBox"></div>
+</aside>
+<!-- panel „Pomoc” (od 2026-11-03): kroki pracy z przejściem do miejsca, skróty, mysz w widoku 3D, zapis projektu -->
+<aside id="helpPanel" class="drawer" hidden aria-labelledby="helpTitle">
+  <div class="drawer-head">
+    <h2 id="helpTitle" data-tr>Pomoc</h2>
+    <button id="btnHelpClose" class="small" data-tr-title="Zamknij"><span aria-hidden="true">✕</span></button>
+  </div>
+  <h3 data-tr>Jak pracować z konfiguratorem</h3>
+  <ol class="help-steps">
+    <li><b data-tr>Biblioteka plików</b> – <span data-tr>wskaż folder z plikami STL od USSA.</span> <button class="small" data-go="settings" data-tr>Ustawienia</button></li>
+    <li><b data-tr>Wieża</b> – <span data-tr>kreatorem albo w edytorze zestawu: warstwy od spodu, dach, podstawa i dodatki.</span> <button class="small" data-go="wizard" data-tr>Kreator wieży…</button></li>
+    <li><b data-tr>Listy części</b> – <span data-tr>„Do druku” (pliki STL, czas, filament, licznik wydrukowanych) i „Niedrukowane” (śruby, pręty, magnesy).</span> <button class="small" data-go="print" data-tr>Do druku</button></li>
+    <li><b data-tr>Opcjonalnie</b> – <span data-tr>pojemniki gridfinity do szuflad i skrzynek oraz etykiety frontów z napisem.</span> <button class="small" data-go="bins" data-tr>Pojemniki gridfinity</button> <button class="small" data-go="labels" data-tr>Etykiety</button></li>
+    <li><b data-tr>Wydruk</b> – <span data-tr>kopie STL i płyty 3MF albo projekt slicera dla Twojej drukarki.</span> <button class="small primary" data-go="job" data-tr>Przygotuj wydruk</button></li>
+    <li><b data-tr>Składanie</b> – <span data-tr>kroki od spodu wieży z częściami, śrubami i stronami instrukcji USSA.</span> <button class="small" data-go="asm" data-tr>Składanie</button></li>
+  </ol>
+  <h3 data-tr>Skróty klawiszowe</h3>
+  <ul class="help-list">
+    <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> – <span data-tr>cofnij / ponów zmianę w projekcie (poza polami tekstowymi)</span></li>
+    <li><kbd>Delete</kbd> – <span data-tr>usuń zaznaczony pojemnik (zakładka pojemników)</span></li>
+    <li><kbd>Esc</kbd> – <span data-tr>zamknij okno (pomoc, ustawienia, kreator, widok 3D) albo odznacz pojemnik</span></li>
+  </ul>
+  <h3 data-tr>Widok 3D</h3>
+  <p class="hint" data-tr>Lewy przycisk – obrót, prawy – przesuwanie, kółko – przybliżenie, dwuklik – widok domyślny, kliknięcie frontu – otwarcie szuflady albo skrzynki. Suwak „Rozsunięcie” rozkłada wieżę na części.</p>
+  <h3 data-tr>Projekt</h3>
+  <p class="hint" data-tr>Projekt zapisuje się sam w tej przeglądarce. „Projekt → Zapisz projekt” zapisuje go do pliku – na kopię albo do przeniesienia na inny komputer. Instrukcje montażu USSA (PDF) są w Ustawieniach, a przy częściach na liście – odnośniki do właściwych stron.</p>
+</aside>
+<div id="updBox"></div>
+<div id="newsBox"></div>
+
+<main>
+  <section class="card" id="side">
+    <div class="side-head">
+      <h2 data-tr>Zestawy (stosy)</h2>
+      <button id="btnSide" class="small"></button>
+    </div>
+    <ul class="stack-list" id="stackList"></ul>
+    <div class="row">
+      <button class="primary" id="btnAddStack" data-tr>+ Nowy</button>
+      <button id="btnWizard" data-tr-title="Nowa wieża krok po kroku: szablon, rozmiar, warstwy, góra i dodatki" data-tr>Kreator…</button>
+      <button id="btnDupStack" data-tr>Duplikuj</button>
+      <button id="btnDelStack" data-tr>Usuń</button>
+    </div>
+    <p class="hint" data-tr>Każdy zestaw to jedna wieża modułów o wspólnej głębokości. Wynik po prawej sumuje wszystkie zestawy razy ich ilość.</p>
+    <h3 data-tr>Dodatkowe pliki</h3>
+    <p class="hint" data-tr>Np. podpory ręczne (Manual Supports), zapasowe części.</p>
+    <input type="search" id="extraSearch" data-tr-placeholder="szukaj pliku…" style="width:100%">
+    <div class="extras-search" id="extraResults" hidden></div>
+    <div id="extrasList"></div>
+  </section>
+
+  <section class="card" id="editor"></section>
+
+  <section class="card">
+    <!-- zakładki w kolejności pracy (od 2026-11-03): listy części → dodatki (pojemniki, etykiety) → przygotowanie wydruku -->
+    <div class="tabs">
+      <button data-tab="print" class="on" data-tr-title="Pliki STL do wydrukowania – ilości, czas, filament, licznik wydrukowanych" data-tr>Do druku</button>
+      <button data-tab="hw" data-tr-title="Śruby, pręty, magnesy i inne elementy do kupienia" data-tr>Niedrukowane</button>
+      <span class="tab-sep" aria-hidden="true"></span>
+      <button data-tab="bins" data-tr-title="Własne pojemniki gridfinity do szuflad i skrzynek (opcjonalnie)" data-tr>Pojemniki gridfinity</button>
+      <button data-tab="gd" data-tr-title="Przegródki Grid Dividers w otworach dna szuflad (opcjonalnie)" data-tr>Przegródki</button>
+      <button data-tab="labels" data-tr-title="Etykiety frontów z napisem i symbolem (opcjonalnie)" data-tr>Etykiety</button>
+      <span class="tab-sep" aria-hidden="true"></span>
+      <button data-tab="job" class="tab-final" data-tr-title="Kopie plików STL i gotowe płyty 3MF dla Twojej drukarki" data-tr>Przygotuj wydruk</button>
+      <button data-tab="asm" data-tr-title="Kroki składania od spodu wieży – części, śruby i strony instrukcji USSA" data-tr>Składanie</button>
+      <span style="margin-left:auto"></span>
+      <button class="small" id="btnCsv" data-tr-title="Eksport CSV"><span aria-hidden="true">⭳</span> CSV</button>
+    </div>
+    <div class="summary" id="summary"></div>
+    <div class="tablewrap" id="result"></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span data-tr>VAULT to system pojemników firmy USSA Design. Ten program jest nieoficjalnym narzędziem i nie zawiera plików STL – kupisz je u producenta:</span>
+  <a href="https://www.ussadesign.com/pages/vault" target="_blank" rel="noopener">ussadesign.com/pages/vault</a> ·
+  <span data-tr>Autorzy programu:</span> rawel2, Claude (Anthropic) ·
+  <a href="https://github.com/rawel2/Vault-Konfigurator-wydania/releases/latest" target="_blank" rel="noopener" data-tr>Instrukcja i aktualizacje</a>
+</footer>
+
+<script>window.VAULT_WEB = {"wersja": "1.1.38+", "commit": "88f1006"};</script>
+<script>
+  // pliki z danymi zmieniają się po skanowaniu – wczytuj je zawsze świeże (bez pamięci podręcznej przeglądarki)
+  for (const f of ["katalog.js", "dane_druku.js", "drukarki.js", "tlumaczenia.js"])
+    document.write(`<script src="${f}?t=${Date.now()}"><\/script>`);
+</script>
+<!-- wizualizacja 3D: same funkcje, globalne z poniższego skryptu są używane dopiero przy otwarciu okna -->
+<script src="wizualizacja.js"></script>
+<!-- pojemniki gridfinity: formularz i podgląd (renderer z wizualizacja.js, bryły liczy serwer – pojemniki.py) -->
+<script src="pojemniki.js"></script>
+<script src="przegrodki.js"></script>
+<script src="etykiety.js"></script>
+<script src="logo.js"></script>
+<script src="skladanie.js"></script>
+<!-- kreator wieży: szablon, rozmiar, warstwy, góra i dodatki, podsumowanie (funkcje z poniższego skryptu – przy otwarciu) -->
+<script src="kreator.js"></script>
+<script>
+"use strict";
+
+// ---------- Wersja online (GitHub Pages) ----------
+// tools/strona.py wstawia do index.html window.VAULT_WEB = { wersja }; ?web w adresie – test lokalny. Bez serwera i bez plików
+// biblioteki: planowanie, listy części i śrub, szacunek, kreator, przegródki USSA, składanie, okno 3D z bryłami poglądowymi.
+// Funkcje serwera (kształty STL, pojemniki, etykiety, logo, płyty 3MF, instrukcje PDF) – komunikat „pobierz program”.
+const WEB = !!window.VAULT_WEB || new URLSearchParams(location.search).has("web");
+const WEB_URL = "https://github.com/rawel2/Vault-Konfigurator-wydania/releases/latest";
+// komunikat przy funkcji serwera: w wersji online – odnośnik do pobrania programu, lokalnie – podany tekst
+function serverNote(msg, cls = "hint") {
+  if (!WEB) return el("p", { class: cls }, msg);
+  return el("p", { class: "hint" }, tr("W wersji online ta funkcja nie działa – potrzebuje plików VAULT na Twoim komputerze. Pobierz konfigurator (Windows, macOS, Linux):") + " ",
+    el("a", { href: WEB_URL, target: "_blank", rel: "noopener" }, tr("Pobierz konfigurator")));
+}
+
+// ---------- Języki ----------
+// tr("tekst polski", {zmienne}) – tłumaczenie ze słownika tlumaczenia.js; klucz to tekst polski, {nazwa} = wartość.
+// Każdy nowy tekst w UI przechodzi przez tr() i dostaje wpis w tlumaczenia.js (sprawdza tools/test_tlumaczen.js).
+const I18N = window.VAULT_I18N || {};
+// de: tłumaczenie DocBiga (zgłoszenie nr 4); fr, es, zh – od 1.1.32 (prośba użytkownika 2026-11-02, przetłumaczył Claude)
+const LANGS = { pl: "pl-PL", en: "en-US", de: "de-DE", fr: "fr-FR", es: "es-ES", zh: "zh-CN" };
+let LANG = "pl";
+const MISSING_TR = new Set();  // brakujące tłumaczenia (do testu)
+function tr(text, vars) {
+  let s = text;
+  if (LANG !== "pl") {
+    const d = I18N[LANG] || {};
+    if (Object.prototype.hasOwnProperty.call(d, text)) s = d[text]; else MISSING_TR.add(text);
+  }
+  return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) : s;
+}
+// "auto": pierwszy obsługiwany język z listy przeglądarki (kolejność = preferencje użytkownika), inaczej angielski
+const resolveLang = choice => choice in LANGS ? choice
+  : ((navigator.languages || [navigator.language || ""]).map(l => l.toLowerCase().split("-")[0])
+      .find(l => l in LANGS) || "en");
+const locale = () => LANGS[LANG];
+// Teksty w statycznym HTML: data-tr (treść), data-tr-title, data-tr-placeholder; oryginał (polski) zapamiętywany przy pierwszym użyciu
+function applyStaticTr() {
+  document.documentElement.lang = LANG;
+  document.title = tr("Konfigurator VAULT") + (SERVER.numer ? " " + SERVER.numer : "") + (WEB ? " online" : "");  // numer wersji z pingu serwera
+  for (const e of document.querySelectorAll("[data-tr]")) {
+    if (!e.dataset.trSrc) e.dataset.trSrc = e.textContent.trim();
+    e.textContent = tr(e.dataset.trSrc);
+  }
+  for (const a of ["title", "placeholder"])
+    for (const e of document.querySelectorAll(`[data-tr-${a}]`)) e.setAttribute(a, tr(e.getAttribute(`data-tr-${a}`)));
+  for (const e of document.querySelectorAll("[data-tr-tip]")) e.setAttribute("aria-label", e.dataset.tip = tr(e.dataset.trTip));
+}
+
+// ---------- Katalog plików ----------
+const FILES = window.VAULT_FILES || [];
+const DOCS = window.VAULT_DOCS || [];
+// Strony instrukcji USSA przy częściach i śrubach (2026-11-01, podpatrzone w Vault-Workbench WangNingkaia; PDF to same
+// obrazy – strony ustalone z miniatur): [numer instrukcji 01–05, strona]. 01 Instructions Manual, 02 Drawer Assembly,
+// 03 Sustainers Assembly, 04 Modifications, 05 Mounting Instructions. Część – po ścieżce pliku (pierwsza pasująca),
+// śruba – po tym, do czego służy (notatka hwAdd); przy śrubach zawsze też „Hardware List” (01 s. 3).
+const DOC_REFS = [
+  [/^01\. drawers\/.*\/modules\//, [["02", 7]]],
+  [/^01\. drawers\/.*\/boxes\//, [["02", 3], ["02", 6]]],
+  [/facade cap\.stl$/, [["02", 6]]],
+  [/^01\. drawers\/.*facade/, [["02", 1], ["02", 6]]],
+  [/key cap\.stl$|\/key \(turn on supports\)\.stl$|hidden key/, [["02", 1]]],
+  [/springs\.stl$/, [["02", 2]]],
+  [/runner guide/, [["02", 7]]],
+  [/runner slide/, [["02", 4]]],
+  [/(^|\/)(s|m|l|xl) rails\.stl$/, [["02", 4]]],
+  [/runner stopper\.stl$|\/latch\.stl$/, [["02", 8]]],
+  [/^01\. drawers\/07\. universal\/label\.stl$/, [["02", 6], ["03", 5]]],
+  [/gridfinity baseplate|\/baseplates\//, [["01", 9]]],
+  [/under table mount/, [["05", 10]]],
+  [/^01\. drawers\/.*(roof|top handle)/, [["01", 10]]],
+  [/lock holder|lock inner part|lock outer part|pins for 1 lock/, [["03", 1], ["03", 2]]],
+  [/hinge top\.stl$/, [["03", 3]]],
+  [/^02\. sustainers\/.*\/hinges\//, [["03", 3]]],
+  [/^02\. sustainers\/.*\/rods\//, [["03", 4]]],
+  [/^02\. sustainers\/.*\/dividers\//, [["03", 7]]],
+  [/label for sustainers/, [["03", 5]]],
+  [/^02\. sustainers\/.*facade/, [["03", 2], ["03", 5]]],
+  [/^02\. sustainers\/.*(roof|connector)/, [["03", 3], ["03", 4]]],
+  [/^02\. sustainers\/.*\/modules\//, [["03", 3], ["03", 4]]],
+  [/^03\. modifications\/base\//, [["04", 2]]],
+  [/^03\. modifications\/wheels\//, [["04", 4], ["04", 6]]],
+  [/^03\. modifications\/feet\//, [["04", 6]]],
+  [/handle lock knob|pull-out handle lock/, [["04", 13], ["04", 14]]],  // leżą w folderze Backbone
+  [/^03\. modifications\/backbone\//, [["04", 10], ["01", 19]]],
+  [/^03\. modifications\/stationary handle\//, [["04", 12]]],
+  [/^03\. modifications\/pull-out handle\//, [["04", 13], ["04", 14]]],
+  [/^03\. modifications\/pegboard attachment\//, [["04", 15]]],
+  [/^03\. modifications\/wall mounts\//, [["05", 1]]],
+];
+const HW_REFS = {
+  "front szuflady": [["02", 6], ["01", 18]], "zawiasy dolne": [["03", 3], ["01", 17]], "zawiasy górne, zamki": [["03", 2], ["03", 3]],
+  "front skrzynki": [["03", 5], ["01", 17]], "ilość wg otworów w dachu – sprawdź": [["05", 11]], "oś podstawy {W}": [["04", 2]],
+  "koła (6 na koło)": [["04", 6]], "koła": [["04", 4], ["04", 5]], "stopka": [["04", 6]], "kręgosłup (długość wg wysokości)": [["04", 10], ["01", 19]],
+  "pegboard": [["04", 15]], "ilość i typ wg ściany": [["05", 6]], "uchwyt stały": [["04", 12]], "uchwyt wysuwany": [["04", 13], ["04", 14]],
+  "uchwyt wysuwany – dociąć, nawiercić i nagwintować M6": [["04", 14]],
+  "kółka meblowe (Casters Mode) – trzpień w otworze Ø 7 mm w spodzie podstawy": [["04", 17]],
+  "uchwyt ścienny – do modułów, długość do weryfikacji": [["05", 8]],
+};
+// kółka meblowe pod podstawą (Casters Mode) – tylko z podstawą i bez kół i stopki (stoją w tym samym miejscu)
+const castersOn = md => !!(md.base && md.casters && !md.wheels && !md.feet);
+const partRefs = file => (DOC_REFS.find(([rx]) => rx.test(norm(file))) || [null, []])[1];
+// odnośniki „instr. 02, s. 7” – PDF z biblioteki otwarty na stronie (#page); brak pliku instrukcji – bez odnośnika
+function docLinks(refs) {
+  if (WEB) return null;  // PDF-y instrukcji są w bibliotece użytkownika, nie na stronie
+  const seen = new Set(), kids = [];
+  for (const [n, pg] of refs) {
+    const k = n + ":" + pg, d = DOCS.find(x => x.split("/").pop().startsWith(n + "_"));
+    if (seen.has(k) || !d) continue;
+    seen.add(k);
+    kids.push(el("a", { href: fileUrl(d) + "#page=" + pg, target: "_blank", title: d.split("/").pop() + " – " + tr("strona {p}", { p: pg }) }, tr("instr. {n}, s. {p}", { n, p: pg })));
+  }
+  return kids.length ? el("div", { class: "refs" }, kids) : null;
+}
+// Ścieżka biblioteki nie jest w katalog.js (ten plik jest w repo, a biblioteka leży na każdym komputerze gdzie indziej) –
+// przychodzi z ustawień serwera (SERVER.settings.biblioteka).
+// Adres pliku z biblioteki: przez serwer (/biblioteka/...) albo względnie (..\vault – domyślne położenie), gdy strona otwarta jako plik
+const fileUrl = rel => {
+  const enc = rel.split("/").map(encodeURIComponent).join("/");
+  return location.protocol === "file:" ? "../vault/" + enc : "/biblioteka/" + enc;
+};
+const samePath = (a, b) => (a || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase() === (b || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+// wkład szuflady: płyta gridfinity (grid, grid1, grid2) – „dividers” to przegródki Grid Dividers (przegrodki.js)
+const insGrid = v => typeof v === "string" && v.startsWith("grid");
+// wkład k-tej szuflady modułu (od góry): c.ins[k] – osobno dla każdej szuflady (od 2026-11-05, prośba użytkownika: moduł 4F
+// z szufladami 2F/1F/1F – „albo wszędzie gridfinity, albo nigdzie”); brak – wkład całego modułu c.insert (starsze projekty)
+const insOf = (c, k) => (Array.isArray(c.ins) && c.ins[k]) || c.insert || "none";
+const norm = p => p.toLowerCase().replace(/['’]/g, "").replace(/\s+/g, " ").replace(/ \//g, "/").replace(/ \.stl$/, ".stl");
+const CATALOG = FILES.map(p => ({ p, n: norm(p) }));
+const findAll = rx => CATALOG.filter(f => rx.test(f.n)).map(f => f.p);
+const R = (strings, ...vals) => new RegExp(String.raw(strings, ...vals));
+
+// ---------- Szacunek druku ----------
+const GEOM = window.VAULT_GEOM || {};
+const PRINT = window.VAULT_PRINT || null;
+// Zwraca czas [s] i filament [g] dla 1 sztuki pliku (przy mnożniku 1.0) oraz źródło danych
+function estimate(file) {
+  if (!PRINT) return null;
+  // front z logo – jak front USSA, z którego powstał (logo to ułamek grama)
+  if (file.startsWith("@logo/") && typeof BIN_GEN !== "undefined" && BIN_GEN.get(file)) return estimate(BIN_GEN.get(file).front);
+  if (file.startsWith("@")) return typeof binEstimate === "function" ? binEstimate(file) : null;  // @gridfinity/, @etykiety/
+  const s = PRINT.source[file];
+  if (s) return { sec: s[0], g: s[1], src: s[2] ? "calc" : "ussa" };
+  const g = GEOM[file];
+  if (!g) return null;
+  const [mg, mt] = [PRINT.model.g, PRINT.model.t];
+  return { sec: mt[0] * g[0] + mt[1] * g[1], g: mg[0] * g[0] + mg[1] * g[1], src: "geom" };
+}
+const SRC_LABEL = { ussa: "z arkusza USSA", calc: "arkusz USSA (wartość wyliczona)", geom: "szacunek z geometrii STL" };
+function fmtTime(sec) {
+  const min = Math.round(sec / 60);
+  if (min < 60) return min + " min";
+  const h = Math.floor(min / 60), m = min % 60;
+  if (h < 48) return `${h} h ${String(m).padStart(2, "0")} min`;
+  return `${Math.floor(h / 24)} d ${h % 24} h`;
+}
+const fmtG = g => g >= 1000 ? (g / 1000).toLocaleString(locale(), { maximumFractionDigits: 2 }) + " kg" : Math.round(g) + " g";
+
+// ---------- Reguły systemu ----------
+const FAMILIES = { S: ["S"], M: ["M"], L: ["L"], XL: ["XL"], SS: ["S", "S"], SM: ["S", "M"], L2: ["S", "S"], XL2: ["S", "M"] };
+const LAYOUT_LABEL = {
+  S: "S", M: "M", L: "L", XL: "XL",
+  SS: "2× S (osobne moduły)", SM: "S + M (osobne moduły)",
+  L2: "L² (moduł L, 2 szuflady S)", XL2: "XL² (moduł XL, szuflady S + M)"
+};
+// S, M, L, XL to oznaczenia – tłumaczone są tylko opisowe etykiety układów
+const layoutLabel = x => (LAYOUT_LABEL[x] !== x ? tr(LAYOUT_LABEL[x]) : x);
+const WIDTH_MM = { S: 164.8, M: 254, L: 329.6, XL: 418.8 };  // z plików STL: front i moduł M = 254, XL = S + M
+const PATTERNS = { 1: [[1]], 2: [[2], [1, 1]], 4: [[4], [2, 2], [1, 1, 1, 1], [2, 1, 1], [1, 1, 2]] };
+const ROOFS = { none: "brak", grid: "Grid (gridfinity)", table: "Table (płaski)", bowl: "Bowl (misa)", under: "Under Table Mount (pod blat)", heavy: "Heavyweight (L, XL)" };
+const ROOF_FILE = { grid: "grid", table: "table", bowl: "bowl", under: "under table mount", heavy: "heawyweight" };
+const ROD_MM = { XL: 504, L: 414, M: 338, S: 248 };
+
+// Szerokość, jaką układ zajmuje w wieży (L = S+S, XL = S+M)
+const LAYOUT_WIDTH = { S: "S", M: "M", L: "L", XL: "XL", SS: "L", L2: "L", SM: "XL", XL2: "XL" };
+// base = szerokość wieży (null dla warstwy 1 – wtedy dowolny układ, który wyznaczy szerokość)
+function allowedLayouts(type, base) {
+  let list = base ? { S: ["S"], M: ["M"], L: ["L", "SS", "L2"], XL: ["XL", "SM", "XL2"] }[base]
+    : ["S", "M", "L", "SS", "L2", "XL", "SM", "XL2"];
+  if (type === "S") list = list.filter(l => l !== "L2" && l !== "XL2");
+  return list;
+}
+const allowedHeights = layout => (layout === "XL" || layout === "XL2") ? [1] : [1, 2, 4];
+const allowedPatterns = (type, h) => type === "S" ? [[h]] : PATTERNS[h];
+const baseWidth = stack => stack.layers.length ? LAYOUT_WIDTH[stack.layers[0].layout] : "S";
+
+// ---------- Stan ----------
+const STORE = "vault-konfigurator-v1";
+let uid = 1;
+const newCol = h => ({ pattern: [h], insert: "none", sInt: "flat", div: { n: 0, w: 0, d: 0, s: 0, sc: 0, ss: 0 } });
+const newLayer = (type = "D", layout = "S", height = 1) => ({ id: uid++, type, layout, height, cols: FAMILIES[layout].map(() => newCol(height)) });
+const newStack = n => ({
+  id: uid++, name: tr("Zestaw {n}", { n }), qty: 1, depth: 3, layers: [newLayer()],
+  roof: "grid", topHandle: false,
+  mods: { base: false, baseSplit: false, wheels: false, feet: false, casters: false, backbone: "none", pegboard: "none", wall: false, handleStatic: false, handlePull: false }
+});
+const defaultState = () => ({ lang: "auto", theme: "auto", stacks: [newStack(1)], current: 0, key: "normal", keyPrint: true, rails: "always", extras: [], tab: "print", speed: 1, price: 80,
+  job: { printer: "h2s", bed: [340, 320, 340], gap: 5, copy: true, make3mf: true, project: false, clean: false }, colors: {},
+  done: {},  // wydrukowane sztuki {plik: n} – licznik przy pozycjach „Do druku”
+  news: [] });  // news: identyfikatory komunikatów startowych zamkniętych z „nie pokazuj więcej”
+let state = defaultState();
+// ustawienia tego komputera, nie projektu – przy wczytaniu pliku zostają, jeśli plik ich nie ma
+const PREFS = ["lang", "theme", "sideOff", "news", "viz", "welcomeOff"];
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE));
+    if (s && Array.isArray(s.stacks) && s.stacks.length) state = Object.assign(state, s);
+  } catch (e) { /* brak zapisu */ }
+  fixIds();
+}
+function save() {
+  try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* tryb prywatny */ }
+  histRecord();
+}
+
+// ---------- Cofnij / Ponów ----------
+// Historia projektu (od 2026-11-03, praca nad spójnością interfejsu – przy tylu opcjach usunięcie warstwy czy układu
+// pojemników jednym kliknięciem było nieodwracalne): każdy zapis porównuje projekt bez ustawień widoku (UI_KEYS) z
+// poprzednim; zmiany w odstępie < 700 ms (pisanie, przeciąganie) łączą się w jeden krok. Cofnięcie podmienia projekt,
+// ustawienia widoku (zakładka, język, okno 3D…) zostają. Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) poza polami tekstowymi.
+const UI_KEYS = ["tab", "lang", "theme", "sideOff", "news", "viz", "binCur", "gdCur", "labelCur", "current", "welcomeOff"];
+const HIST = { undo: [], redo: [], last: null, t: 0, MAX: 80 };
+function projJson() {
+  return JSON.stringify(state, function (k, v) { return this === state && UI_KEYS.includes(k) ? undefined : v; });
+}
+function histRecord() {
+  const j = projJson(), now = Date.now();
+  if (HIST.last !== null && j !== HIST.last) {
+    if (now - HIST.t > 700 || !HIST.undo.length) {
+      HIST.undo.push(HIST.last);
+      if (HIST.undo.length > HIST.MAX) HIST.undo.shift();
+    }
+    HIST.redo = [];
+    HIST.t = now;
+  }
+  HIST.last = j;
+  histButtons();
+}
+const histBreak = () => { HIST.t = 0; };  // następna zmiana to osobny krok (usunięcia z komunikatem „Cofnij”)
+function histApply(from, to) {
+  if (!from.length) return false;
+  to.push(HIST.last);
+  const json = from.pop(), ui = {};
+  for (const k of UI_KEYS) if (k in state) ui[k] = state[k];
+  state = Object.assign(JSON.parse(json), ui);
+  HIST.last = json; HIST.t = 0;
+  fixIds();
+  if (typeof BIN !== "undefined") BIN.sel = -1;
+  state.stacks.forEach(normalizeStack);
+  try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* tryb prywatny */ }
+  render(); histButtons();
+  return true;
+}
+const undo = () => histApply(HIST.undo, HIST.redo);
+const redo = () => histApply(HIST.redo, HIST.undo);
+function histButtons() {
+  const u = document.getElementById("btnUndo"), r = document.getElementById("btnRedo");
+  if (u) u.disabled = !HIST.undo.length;
+  if (r) r.disabled = !HIST.redo.length;
+}
+// krótki komunikat na dole okna (np. „Usunięto warstwę 3”) z przyciskiem „Cofnij”
+function toast(msg, withUndo = true) {
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.append(t); }
+  t.replaceChildren(el("span", {}, msg), withUndo && HIST.undo.length
+    ? el("button", { class: "small", onclick: () => { undo(); t.hidden = true; } }, tr("Cofnij")) : null);
+  t.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { t.hidden = true; }, 7000);
+}
+function fixIds() {
+  // grupy kolorów rozdzielone 2026-11-05: nowa grupa dostaje kolor grupy, z której się wydzieliła (projekt drukuje się jak dawniej)
+  if (state.colors && state.colorsVer !== 2) {
+    for (const [n, o] of [["fronty_skrzynek", "fronty"], ["blokady", "drobne"], ["etykiety", "drobne"], ["uchwyty", "modyfikacje"], ["wklady_skrzynek", "wklady"]])
+      if (state.colors[o] && !state.colors[n]) state.colors[n] = state.colors[o];
+    state.colorsVer = 2;
+  }
+  for (const st of state.stacks) { uid = Math.max(uid, st.id + 1); for (const l of st.layers) uid = Math.max(uid, l.id + 1); }
+  state.current = Math.min(state.current, state.stacks.length - 1);
+}
+const cur = () => state.stacks[state.current];
+
+// Pilnuje, by warstwy były zgodne z regułami po każdej zmianie
+function normalizeStack(st) {
+  st.layers.forEach((l, i) => {
+    const allowed = allowedLayouts(l.type, i ? baseWidth(st) : null);
+    if (!allowed.includes(l.layout)) {
+      // najbliższy dozwolony odpowiednik: L² skrzynek → 2× S, zmiana L↔XL → bliźniaczy układ, na końcu pełny moduł
+      const alt = [{ L2: "SS", XL2: "SM" }[l.layout], { SS: "SM", SM: "SS", L2: "XL2", XL2: "L2" }[l.layout],
+        { SS: "L", L2: "L", SM: "XL", XL2: "XL" }[l.layout]];
+      l.layout = alt.find(a => allowed.includes(a)) || allowed[0];
+    }
+    if (!allowedHeights(l.layout).includes(l.height)) l.height = 1;
+    const fams = FAMILIES[l.layout];
+    if (l.cols.length !== fams.length) l.cols = fams.map((_, k) => l.cols[k] || newCol(l.height));
+    for (const c of l.cols) {
+      const pats = allowedPatterns(l.type, l.height);
+      if (!pats.some(p => p.join() === c.pattern.join())) c.pattern = pats[0].slice();
+      // wkład na szufladę: tyle pozycji, ile szuflad (po zmianie frontów brakujące – wkład modułu); wszystkie jednakowe –
+      // z powrotem jeden wkład modułu
+      if (Array.isArray(c.ins)) {
+        c.ins = c.pattern.map((_, k) => c.ins[k] || c.insert || "none");
+        if (c.ins.every(v => v === c.ins[0])) { c.insert = c.ins[0]; delete c.ins; }
+      }
+    }
+  });
+  const top = st.layers[st.layers.length - 1];
+  if (st.roof === "heavy" && !["L", "XL"].includes(baseWidth(st))) st.roof = "grid";
+  if (st.depth < 6) st.mods.baseSplit = false;
+  // koła i stopka to jedno pole (2026-11-05, decyzja użytkownika): koła z tyłu na osi M16, stopka z przodu – podstawa
+  // ma otwory na stopkę tylko z przodu, więc samo jedno albo samo drugie nie trzyma wieży poziomo; starsze projekty
+  // z jednym z nich dostają oba
+  if (!!st.mods.wheels !== !!st.mods.feet) st.mods.wheels = st.mods.feet = true;
+  return top;
+}
+
+// ---------- Lista części ----------
+// Etykiety i uwagi to polskie szablony tłumaczone tutaj: add(grupa, "{fam}{d} pudełko {h}F", rx, ilość, { v: {fam, d, h}, note }).
+// Grupa zostaje kluczem wewnętrznym (GROUP_ORDER) i jest tłumaczona dopiero przy wyświetlaniu. opts.raw = etykieta bez tłumaczenia.
+class Bom {
+  constructor() { this.parts = new Map(); this.hw = new Map(); }
+  add(group, label, rx, qty, opts = {}) {
+    if (!qty) return;
+    label = opts.raw ? label : tr(label, opts.v);
+    const note = opts.note && tr(opts.note, opts.v);
+    let files = findAll(rx);
+    if (!opts.all) files = files.slice(0, 1);
+    if (!files.length) files = ["?" + label];
+    for (const f of files) {
+      const e = this.parts.get(f) || { file: f, missing: f.startsWith("?"), qty: 0, groups: new Set(), labels: new Set(), notes: new Set() };
+      e.qty += qty; e.groups.add(group); e.labels.add(label);
+      if (note) e.notes.add(note);
+      this.parts.set(f, e);
+    }
+  }
+  // pojemnik gridfinity z zakładki „Pojemniki gridfinity” – pliku nie ma w bibliotece, generuje go serwer (gen = parametry)
+  addGen(group, label, file, qty, gen) {
+    if (!qty) return;
+    const e = this.parts.get(file) || { file, gen, missing: false, qty: 0, groups: new Set(), labels: new Set(), notes: new Set() };
+    e.qty += qty; e.groups.add(group); e.labels.add(label);
+    this.parts.set(file, e);
+  }
+  hwAdd(name, qty, note, v) {
+    if (!qty) return;
+    const refs = (typeof HW_REFS !== "undefined" && HW_REFS[note]) || [];
+    name = tr(name, v);
+    const e = this.hw.get(name) || { name, qty: 0, notes: new Set(), refs: [] };
+    e.qty += qty; if (note) e.notes.add(tr(note, v));
+    e.refs.push(...refs);
+    this.hw.set(name, e);
+  }
+}
+
+const HW = {
+  m4_10: "Śruba M4 × 10 mm", m4_14: "Śruba M4 × 14 mm", m4_20: "Śruba M4 × 20 mm", m4_25: "Śruba M4 × 25 mm",
+  m4_40: "Śruba M4 × 40 mm", m4_60: "Śruba M4 × 60 mm", m4_long: "Śruba M4 × 60–100 mm",
+  m6_30: "Śruba M6 × 30 mm (płaski łeb)", m6_35: "Śruba M6 × 35 mm (łeb sześciokątny)", m6_50: "Śruba M6 × 50 mm", m6_90: "Śruba M6 × 90 mm",
+  insert: "Wkładka gwintowana M6 × 8 × 8 (heat insert)", bearing: "Łożysko 6205ZZ (25 × 52 × 15 mm)", scsaw: "Pierścień zaciskowy SCSAW 16 (16 × 35 × 10 mm)"
+};
+
+function addDrawer(b, m, fam, d, h, multiBox, where, k = 0) {
+  const w = fam.toLowerCase(), G = "Szuflady", v = { fam, d, h };
+  const PODPORY = "drukować z podporami", DWIE = "plik = 2 szt.";
+  if (fam === "XL") b.add(G, "XL{d} pudełko", R`^01\. drawers/[^/]+/xl${d}/boxes/[^/]+\.stl$`, m, { all: true, v });
+  else b.add(G, "{fam}{d} pudełko {h}F", R`^01\. drawers/[^/]+/${w}${d}/boxes/${w}${d} box ${h}f\.stl$`, m, { v });
+  if (fam === "XL") b.add(G, "XL front 1F", R`^01\. drawers/05\. xl families/xl facade 1f\.stl$`, m);
+  else b.add(G, "{fam} front {h}F", R`^01\. drawers/[^/]+/facades/${w}${h}f \(turn on supports\)\.stl$`, m, { note: PODPORY, v });
+  // Prowadnice i ślizgi – dwie wersje biblioteki USSA:
+  //  stara: „x3 Runner Guides.stl”, „XL3 Runner Guides.stl” – 2 sztuki w pliku → 1 plik na szufladę,
+  //  nowa (X 2026): „x3 Runner Guide.stl”, „XL Runners/x3 Runner Guide XL.stl” – 1 sztuka w pliku → 2 pliki na szufladę.
+  const run = fam === "XL" ? "xl" + d : "x" + d;
+  const runner = kind => {  // -> [wzorzec, ilość, opcje] dla wersji biblioteki, która jest na dysku
+    const nowa = fam === "XL" ? R`/runners/xl runners/x${d} runner ${kind} xl\.stl$` : R`/runners/x${d} runner ${kind}\.stl$`;
+    return findAll(nowa).length ? [nowa, 2 * m, { v: { run } }] : [R`/runners/${run} runner ${kind}s\.stl$`, m, { note: DWIE, v: { run } }];
+  };
+  b.add(G, "prowadnice {run}", ...runner("guide"));
+  b.add(G, "ślizgi {run}", ...runner("slide"));
+  if (state.rails === "always" || (state.rails === "auto" && multiBox))
+    b.add(G, "listwy zębate {fam}", R`/geared rails/${w} rails\.stl$`, m, { note: DWIE, v });
+  b.add(G, "sprężyny", R`^01\. drawers/07\. universal/springs\.stl$`, m, { note: DWIE });
+  if (state.key === "hidden") {
+    b.add(G, "ukryty kluczyk", R`^01\. drawers/07\. universal/hidden key \(turn on supports\)\.stl$`, m, { note: PODPORY });
+    // cz. 2 (wyjmowana rączka) – jedna na projekt, w buildBom (opcja „drukuj klucz”)
+  } else {
+    b.add(G, "kluczyk", R`^01\. drawers/07\. universal/key \(turn on supports\)\.stl$`, m, { note: PODPORY });
+    b.add(G, "nakładka kluczyka", R`^01\. drawers/07\. universal/key cap\.stl$`, m);
+  }
+  // zaślepki na odsłonięte śruby frontu (jedną śrubę zakrywa etykieta). Pogłębienia policzone w plikach STL
+  // (siatki3d.opis_frontu, 2026-10-24): S1F – 2 → 1 zaślepka; S2F/S4F, M1F, L1F, XL – 4 → 3; M i L 2F/4F – 6 → 5
+  // (tyle, ile śrub M4 × 14 – 6 na front 2F/4F). Zgłoszenie nr 2 przyjęło 3 dla wszystkich poza S1F.
+  const caps = fam === "S" && h === 1 ? 1 : (fam === "M" || fam === "L") && h > 1 ? 5 : 3;
+  b.add(G, "zaślepka frontu", R`^01\. drawers/07\. universal/facade cap\.stl$`, caps * m, { note: "S1F – 1 na front, M i L 2F/4F – 5, pozostałe – 3 (pogłębienia śrub poza etykietą)" });
+  b.add(G, "etykieta", R`^01\. drawers/07\. universal/label\.stl$`, m);
+  const ins = insOf(where, k);
+  if (insGrid(ins)) {
+    const base = R`^01\. drawers/[^/]+/${w}${d}/gridfinity baseplate/${w}${d} baseplate( part \d)?\.stl$`;
+    let rx = base;
+    if (ins === "grid2") rx = R`^01\. drawers/[^/]+/${w}${d}/gridfinity baseplate/${w}${d} (baseplate_with 2 handles|gridfinity baseplate 2_handles)\.stl$`;
+    if (ins === "grid1") rx = R`^01\. drawers/[^/]+/${w}${d}/gridfinity baseplate/${w}${d} baseplate_with 1 handle\.stl$`;
+    if (rx !== base && !findAll(rx).length) {
+      b.add("Wkłady", "{fam}{d} baseplate gridfinity", base, m, { all: true, v, note: "brak wersji z uchwytami dla tego rozmiaru – użyto zwykłej" });
+    } else b.add("Wkłady", "{fam}{d} baseplate gridfinity", rx, m, { all: true, v });
+  }
+  b.hwAdd(HW.m4_14, (h === 1 ? 4 : 6) * m, "front szuflady");
+}
+
+// Rowki na przegródki w modułach skrzynek: środki w mm od tyłu modułu, jednakowe w 1F, 2F i 4F (zmierzone przekrojem
+// 20 mm nad spodem we wszystkich plikach modułów 2026-11-01, zgłoszenie użytkownika: przegródki obok rowków). Układ
+// zależy od rodziny, głębokości i wnętrza (L/XL: d – „pod przegródki”, s – „szczelne”; w XL szczelnym te same rowki są
+// w obu ścianach wewnętrznych). Płaskie wnętrze nie ma rowków.
+const SUST_GROOVES = {
+  S3: [34.6, 75.6, 116.6], S4: [55.6, 96.6, 137.6], S5: [56.6, 97.6, 138.6, 179.6],
+  S6: [55.6, 97.6, 139.6, 181.6, 223.6], S7: [55.6, 97.6, 139.6, 181.6, 223.6, 265.6],
+  M3: [45, 75.6, 106], M4: [53.6, 95.6, 137.6], M5: [66.2, 117.6, 169.2],
+  M6: [55.6, 97.6, 139.6, 181.6, 223.6], M7: [55.6, 97.6, 139.6, 181.6, 223.6, 265.6],
+  L3d: [34.6, 75.6, 116.6], L4d: [53.6, 95.6, 137.6], L5d: [53.6, 95.6, 137.6, 179.6],
+  L6d: [53.6, 95.6, 137.6, 179.6, 221.6], L7d: [53.6, 95.6, 137.6, 179.6, 221.6, 263.6],
+  L3s: [57, 94.2], L4s: [50.8, 92.8, 134.8], L5s: [50.8, 92.8, 134.8, 176.8],
+  L6s: [50.8, 92.8, 134.8, 176.8, 218.8], L7s: [50.8, 92.8, 134.8, 176.8, 218.8, 260.8],
+  XL3d: [45, 75.6, 106], XL4d: [54.6, 96.6, 138.6], XL5d: [54.6, 96.6, 138.6, 180.6],
+  XL6d: [54.6, 96.6, 138.6, 180.6, 222.6], XL7d: [54.6, 96.6, 138.6, 180.6, 222.6, 264.6],
+  XL3s: [52.2, 73.2, 94.2], XL4s: [57, 96.6, 136.2], XL5s: [52.2, 94.2, 136.2, 178.2],
+  XL6s: [52.2, 94.2, 136.2, 178.2, 220.2], XL7s: [52.2, 94.2, 136.2, 178.2, 220.2, 262.2],
+};
+const sustGrooves = (fam, d, sInt) => SUST_GROOVES[fam === "S" || fam === "M" ? fam + d
+  : fam + d + ({ dividers: "d", sealed: "s" }[sInt] || "-")] || [];
+// Najwięcej przegródek danego rodzaju (col.div): po jednej w rowku, uszczelniające L i boczne XL – w każdej połówce/
+// bocznej części, podłużne – po jednej w nacięciu tylnej ściany (2). Większe liczby z formularza są przycinane.
+function divMax(fam, d, sInt, k) {
+  const n = sustGrooves(fam, d, sInt).length;
+  if (fam === "S" || fam === "M") return k === "n" ? n : 0;
+  if (sInt === "dividers") return { w: n, d: n ? 2 : 0 }[k] || 0;
+  if (sInt === "sealed") return (fam === "L" ? { s: 2 * n } : { sc: n, ss: 2 * n })[k] || 0;
+  return 0;
+}
+
+function addSustainer(b, m, fam, d, h, col) {
+  const w = fam.toLowerCase(), G = "Skrzynki", v = { fam, d, h, int: col.sInt };
+  if (fam === "S" || fam === "M")
+    b.add(G, "{fam}{d} skrzynka {h}F", R`^02\. sustainers/[^/]+/${w}${d}/modules/${w}${d} ${h}f module\.stl$`, m, { v });
+  else
+    b.add(G, "{fam}{d} skrzynka {h}F {int}", R`^02\. sustainers/[^/]+/${w}${d}/modules/${w}${d} ${h}f ${col.sInt} module\.stl$`, m, { v });
+  // spód modułu skrzynki ma gniazda na zatrzask jak moduł szuflad – S i M jedno, L i XL dwa (mapy spodów S4, M4, L4, XL4,
+  // 2026-11-05; instrukcja skrzynek tego kroku nie pokazuje, do tej pory skrzynki bez zatrzasków)
+  b.add(G, "zatrzask", LATCH, (fam === "L" || fam === "XL" ? 2 : 1) * m);
+  if (d >= 6 && col.splitLid) {
+    b.add(G, "{fam}{d} wieko (2 części)", R`^02\. sustainers/[^/]+/${w}${d}/roofs?/${w}${d} roof part \d\.stl$`, m, { all: true, v });
+    b.add(G, "łącznik dzielonego wieka", R`^02\. sustainers/[^/]+/${w}${d}/roofs?/connector for split roof\.stl$`, m, { note: "ilość do weryfikacji" });
+  } else b.add(G, "{fam}{d} wieko", R`^02\. sustainers/[^/]+/${w}${d}/roofs?/${w}${d} roof( whole)?\.stl$`, m, { v });
+  if (fam === "XL") b.add(G, "XL front 1F", R`^02\. sustainers/04\. xl families/xl1f facade\.stl$`, m);
+  else b.add(G, "{fam} front {h}F", R`^02\. sustainers/[^/]+/facades/${w}${h}f facade\.stl$`, m, { v });
+  const U = "^02\\. sustainers/05\\. universal/";
+  const hinge = fam === "S" || fam === "M" ? (h === 1 ? "s-m 1f hinge" : "s-m 2-4f hinge") : (h === 1 ? "l-xl 1f hinge" : "l 2-4f hinge");
+  b.add(G, "zawias dolny", new RegExp(U + "hinges/" + hinge + "\\.stl$"), m, { note: "plik = 2 szt." });
+  const top = fam === "S" ? "s hinge top" : fam === "M" ? "m hinge top" : "l-xl hinge top";
+  // jeden plik na skrzynkę: wieko S/M ma jeden występ pod zawias (plik = 1 szt., szeroki), L/XL dwa, a plik L-XL ma 2 sztuki
+  // (sprawdzone w plikach 2026-10-24; wcześniej liczone 2 pliki)
+  b.add(G, "zawias górny", new RegExp(U + "hinges/" + top + "\\.stl$"), m, fam === "L" || fam === "XL" ? { note: "plik = 2 szt." } : undefined);
+  // zamki: front S i M ma jedno wycięcie na zamek, L i XL dwa (sprawdzone w plikach frontów i na widoku 3D, 2026-10-24)
+  const locks = (fam === "S" || fam === "M" ? 1 : 2) * m;
+  b.add(G, "zamek – uchwyt", new RegExp(U + "locks/lock holder\\.stl$"), locks);
+  b.add(G, "zamek – część wewn.", new RegExp(U + "locks/lock inner part\\.stl$"), locks);
+  b.add(G, "zamek – część zewn.", new RegExp(U + "locks/lock outer part " + (h === 1 ? "1f" : "2-4f") + "\\.stl$"), locks);
+  b.add(G, "piny zamka", new RegExp(U + "locks/1 set of pins for 1 lock\\.stl$"), locks, { note: "plik = komplet na 1 zamek" });
+  b.add(G, "pręty zawiasów", new RegExp(U + "rods/" + (fam === "S" || fam === "M" ? "s-m" : "l-xl") + " rods\\.stl$"), m, { note: "plik = 2 szt." });
+  // etykieta: front 1F ma krótką wnękę (37,7 mm) na „Label for Sustainers”, fronty 2F i 4F – taką jak szuflady (47,6 mm)
+  // na Label.stl (zmierzone w plikach frontów 2026-10-27, zgłoszenie użytkownika; wcześniej wszędzie etykieta skrzynki)
+  if (h === 1) b.add(G, "etykieta skrzynki", new RegExp(U + "label for sustainers\\.stl$"), m);
+  else b.add(G, "etykieta", R`^01\. drawers/07\. universal/label\.stl$`, m);
+  if (col.grid) b.add("Wkłady", "{fam}{d} baseplate gridfinity (skrzynka)", R`^02\. sustainers/05\. universal/baseplates/[^/]+/${w}${d}( part \d)?( gridfinity)? baseplate\.stl$`, m, { all: true, v });
+  // przegródki
+  // L/XL: poprzeczne i podłużne tylko we wnętrzu „pod przegródki”, uszczelniające tylko w „szczelnym” (płaskie nie ma
+  // rowków); liczby przycięte do liczby rowków (divMax)
+  const D = "Przegródki", wn = col.sInt || "flat", n = {};
+  for (const k of ["n", "w", "d", "s", "sc", "ss"]) n[k] = Math.min(col.div[k] || 0, divMax(fam, d, wn, k));
+  if (fam === "S" || fam === "M") b.add(D, "{fam} przegródka {h}F", new RegExp(U + `dividers/${w} dividers/${w}${h}f divider\\.stl$`), n.n * m, { v });
+  if (fam === "L" && wn === "dividers") {
+    b.add(D, "L przegródka szer. {h}F", new RegExp(U + `dividers/l width dividers/l-${h}f width divider\\.stl$`), n.w * m, { v });
+    b.add(D, "L{d} przegródka głęb. {h}F", new RegExp(U + `dividers/l depth dividers/l${d}-${h}f depth divider\\.stl$`), n.d * m, { v });
+  }
+  if (fam === "L" && wn === "sealed")
+    b.add(D, "L przegródka uszczelniająca {h}F", new RegExp(U + `dividers/l seal dividers/l-${h}f seal divider\\.stl$`), n.s * m, { v });
+  if (fam === "XL" && wn === "dividers") {
+    b.add(D, "XL przegródka szer.", new RegExp(U + "dividers/xl width divider\\.stl$"), n.w * m);
+    b.add(D, "XL{d} przegródka głęb.", new RegExp(U + `dividers/xl depth dividers/xl${d} depth divider\\.stl$`), n.d * m, { v });
+  }
+  if (fam === "XL" && wn === "sealed") {
+    b.add(D, "XL przegródka uszcz. (środek)", new RegExp(U + "dividers/xl seal divider \\(center\\)\\.stl$"), n.sc * m);
+    b.add(D, "XL przegródka uszcz. (boki)", new RegExp(U + "dividers/xl seal divider \\(sides\\)\\.stl$"), n.ss * m);
+  }
+  b.hwAdd(HW.m4_10, 8 * m, "zawiasy dolne");
+  b.hwAdd(HW.m4_14, 4 * locks + (fam === "S" || fam === "M" ? 4 : 8) * m, "zawiasy górne, zamki");  // 4 śruby na zamek i na zawias górny (otwory w plikach)
+  b.hwAdd(HW.m4_20, 7 * m, "front skrzynki");
+}
+
+// Dzieli wysokość warstwy na dostępne elementy (np. 4F → 2× 2F, XL 2F → 2× 1F)
+function boardsFor(h, exists) {
+  if (exists(h)) return [h];
+  if (h === 4 && exists(2)) return [2, 2];
+  return Array(h).fill(1);
+}
+
+const LATCH = R`^01\. drawers/07\. universal/latch\.stl$`;
+
+// Lista części zestawu składa się z kawałków (moduły warstwy, dach, podstawa, kręgosłup i uchwyty warstwy, uchwyty) –
+// te same funkcje liczą kroki zakładki „Składanie” (m = 1, jedna wieża), więc kroki i lista części zawsze się zgadzają.
+const WERYF = "ilość do weryfikacji";
+// moduł warstwy szuflad (obudowa), zatrzaski i blokady prowadnic – bez szuflad (addDrawer)
+function addDrawerModule(b, m, l, d) {
+  const fams = FAMILIES[l.layout], v = { d, h: l.height }, G = "Szuflady";
+  if (l.layout === "L2") {
+    b.add(G, "L{d}² moduł {h}F", R`^01\. drawers/[^/]+/l${d}²/l${d}² module ${l.height}f\.stl$`, m, { v });
+    b.add(G, "akcesoria L² x{d} (1st)", R`/l² accessories/x${d} accessory 1st\.stl$`, m, { note: WERYF, v });
+    b.add(G, "akcesoria L² x{d} (2nd)", R`/l² accessories/x${d} accessory 2nd\.stl$`, m, { note: WERYF, v });
+    b.add(G, "zatrzask", LATCH, 2 * m);
+  } else if (l.layout === "XL2") {
+    b.add(G, "XL{d}² moduł 1F", R`^01\. drawers/[^/]+/xl${d}²/xl${d}² module 1f\.stl$`, m, { v });
+    b.add(G, "zatrzask", LATCH, 2 * m);
+  } else for (const fam of fams) {
+    const f = fam.toLowerCase();
+    b.add(G, "{fam}{d} moduł {h}F", R`^01\. drawers/[^/]+/${f}${d}/modules/${f}${d} module ${l.height}f\.stl$`, m, { v: { ...v, fam } });
+    // moduły L i XL (także L²/XL²) mają w spodzie dwie kieszenie na zatrzask, S i M jedną (sprawdzone w plikach STL 2026-10-25)
+    b.add(G, "zatrzask", LATCH, (fam === "L" || fam === "XL" ? 2 : 1) * m);
+  }
+  // blokady prowadnic: po jednej w każdej szczelinie 8 × 18 mm w ścianach modułu – na każdy poziom 1F po jednej
+  // w każdej ścianie bocznej (2 na F), L² i XL² mają jeszcze przelotową szczelinę w środkowej ścianie (3 na F).
+  // Najniższa szczelina szuflady blokuje prowadnicę, pozostałe tylko zaślepiają otwory (zgłoszenie użytkownika
+  // 2026-10-26; szczeliny policzone w plikach STL; do 1.1.21 – 2 na szufladę)
+  const walls = l.layout === "L2" || l.layout === "XL2" ? 3 : 2 * fams.length;
+  b.add(G, "blokada prowadnic", R`/runners/runner stopper\.stl$`, walls * l.height * m,
+    { note: "po 1 w każdej szczelinie ściany modułu: 2 na każde F (L² i XL² – 3)" });
+}
+
+function addRoof(b, st, m) {
+  const d = st.depth, W = baseWidth(st), w = W.toLowerCase();
+  const top = st.layers[st.layers.length - 1];
+  if (!top || top.type !== "D" || st.roof === "none") return;
+  const G = "Dachy";
+  // Heavyweight XL: nowa biblioteka ma wersję „Cut” 337 × 320 mm (pełna ma 366 × 348 mm i nie mieści się na stołach ~350 × 320)
+  const cut = st.roof === "heavy" && W === "XL" ? R`^01\. drawers/[^/]+/xl${d}/roofs/xl${d} heavyweight roof cut\.stl$` : null;
+  if (cut && findAll(cut).length) b.add(G, "{W}{d} dach {roof}", cut, m, { note: "wersja Cut 337 × 320 mm – mieści się na stole ok. 350 × 320 mm", v: { W, d, roof: tr(ROOFS[st.roof]) } });
+  else b.add(G, "{W}{d} dach {roof}", R`^01\. drawers/[^/]+/${w}${d}/roofs/${w}${d} ${ROOF_FILE[st.roof]} roof\.stl$`, m, { v: { W, d, roof: tr(ROOFS[st.roof]) } });
+  // spód każdego dachu szuflad ma gniazda na zatrzask jak spód modułu – S i M jedno, L i XL dwa (mapy spodów Grid, Table,
+  // Bowl, Under Table, Heavyweight S4/L4/XL4, 2026-11-05; do tej pory dach bez zatrzasków)
+  b.add(G, "zatrzask", LATCH, (W === "L" || W === "XL" ? 2 : 1) * m);
+  if (st.roof === "heavy") {
+    b.add(G, "uchwyt dachu heavyweight", R`^01\. drawers/07\. universal/heawyweight roof handle\.stl$`, m, { note: WERYF });
+    b.add(G, "wkładka dachu heavyweight", R`^01\. drawers/07\. universal/heawyweight roof insert\.stl$`, m, { note: WERYF });
+  }
+  if (st.roof === "under") b.hwAdd("Wkręty do blatu", m, "ilość wg otworów w dachu – sprawdź");
+  if (st.topHandle && st.roof === "grid") {  // tylko dach Grid (patrz formularz „Góra”)
+    b.add(G, "uchwyt górny", R`^01\. drawers/07\. universal/top handle \(turn on supports\)\.stl$`, m, { note: "drukować z podporami" });
+    b.hwAdd(HW.m6_50, 2 * m, "uchwyt górny");
+  }
+}
+
+const MOD_DIR = "^03\\. modifications/";
+// podstawa z prętem, koła i stopka (koła i stopka tylko z podstawą – formularz wyszarza je bez niej)
+function addBase(b, st, m) {
+  const md = st.mods, G = "Modyfikacje", d = st.depth, W = baseWidth(st), w = W.toLowerCase(), vw = { W, d };
+  if (md.base) {
+    if (md.baseSplit) {
+      b.add(G, "{W}{d} podstawa (2 części)", new RegExp(MOD_DIR + `base/${w}/${w}${d} base part \\d\\.stl$`), m, { all: true, v: vw });
+      b.add(G, "łącznik podstawy", new RegExp(MOD_DIR + "base/base connector\\.stl$"), m, { note: WERYF });
+    } else b.add(G, "{W}{d} podstawa", new RegExp(MOD_DIR + `base/${w}/${w}${d} base( whole)?\\.stl$`), m, { v: vw });
+  }
+  if (md.base && md.wheels) {
+    // pręt M16 to oś kół (Modifications 2/15: wsuwany w podstawę, na końcach tuleje kół) – bez kół zbędny (zgłoszenie
+    // użytkownika 2026-11-05; do tej pory przy każdej podstawie)
+    b.hwAdd("Pręt gwintowany M16 × {mm} mm", m, "oś podstawy {W}", { mm: ROD_MM[W], W });
+    for (const [n, f] of [["koło – tarcza", "disk"], ["koło – pokrywa", "cover"], ["tuleja", "bushing"]])
+      b.add(G, n, new RegExp(MOD_DIR + `wheels/${f}\\.stl$`), 2 * m);
+    b.add(G, "opona (TPU)", new RegExp(MOD_DIR + "wheels/tyre \\(tpu\\)\\.stl$"), 2 * m, { note: "filament TPU" });
+    b.add(G, "przyrząd do tulei (jig)", new RegExp(MOD_DIR + "wheels/jig\\.stl$"), 1, { note: "narzędzie – wystarczy 1 szt." });
+    b.hwAdd(HW.m4_25, 12 * m, "koła (6 na koło)");
+    b.hwAdd(HW.bearing, 2 * m, "koła");
+    b.hwAdd(HW.scsaw, 2 * m, "koła");
+  }
+  if (md.base && md.feet) {
+    b.add(G, "{W} stopka", new RegExp(MOD_DIR + `feet/${w} feet\\.stl$`), m, { v: vw });
+    b.hwAdd(HW.m6_90, 2 * m, "stopka");
+  }
+  // otwory Ø 7 mm na wylot w spodzie każdej podstawy: 30 mm od boków, 17 mm od tyłu i 20 mm od przodu (pomiar S, M, L, XL)
+  if (castersOn(md)) b.hwAdd("Kółko meblowe skrętne z trzpieniem gwintowanym M8", 4 * m, "kółka meblowe (Casters Mode) – trzpień w otworze Ø 7 mm w spodzie podstawy");
+}
+
+// Skrzynki a tył wieży (pomiar siatek 2026-11-06, po przeglądzie VAULTaway – zgoda użytkownika): zawiasy skrzynki wystają
+// 13–15,7 mm za tył modułu i wchodzą w kręgosłup (ok. 13 mm) i w płytę uchwytu ściennego (ok. 10 mm, płyta bez wycięć),
+// a przy otwieraniu wieko z całą górą wieży odchyla się do tyłu. Dlatego: kręgosłup (z nim pegboard i uchwyt stały) tylko
+// na warstwach szuflad pod pierwszą skrzynką, uchwyt wysuwany (pręty przez całą wysokość) i uchwyt ścienny – tylko
+// w wieży bez skrzynek. Zapisany wybór czeka (jak koła bez podstawy).
+const hasSust = st => st.layers.some(l => l.type === "S");
+// liczba warstw od spodu, na których może być kręgosłup – do pierwszej skrzynki
+function bbLayers(st) { const i = st.layers.findIndex(l => l.type === "S"); return i < 0 ? st.layers.length : i; }
+const backOn = st => st.mods.backbone !== "none" && bbLayers(st) > 0;
+const wallOn = st => !!st.mods.wall && st.mods.backbone === "none" && !hasSust(st);
+const pullOn = st => !!st.mods.handlePull && !hasSust(st);
+
+// kręgosłup, pegboard i uchwyt ścienny jednej warstwy
+function addLayerMods(b, st, l, m) {
+  const md = st.mods, G = "Modyfikacje", W = baseWidth(st), w = W.toLowerCase();
+  const bbHere = md.backbone !== "none" && st.layers.indexOf(l) < bbLayers(st);  // kręgosłup tylko pod pierwszą skrzynką
+  if (!bbHere && !wallOn(st)) return;
+  const rxBack = h => new RegExp(MOD_DIR + `backbone/${w}${h}f backbone\\.stl$`);
+  const rxUni = h => new RegExp(MOD_DIR + `backbone/universal ${h}f backbone\\.stl$`);
+  const pegDir = md.pegboard === "ikea" ? "ikea skadis pegboard" : "ussa pegboard";
+  const rxPeg = h => new RegExp(MOD_DIR + `pegboard attachment/${pegDir}/${w}${h}f\\.stl$`);
+  const rxWall = h => new RegExp(MOD_DIR + `wall mounts/${w}${h}f wall mount\\.stl$`);
+  const has = rx => h => findAll(rx(h)).length > 0;
+  const split = (hs, h0, v) => hs.length > 1 ? { note: "warstwa {h0}F złożona z {n}× {h1}F – do weryfikacji", v: { ...v, h0, n: hs.length, h1: hs[0] } } : { v };
+  const h0 = l.height;
+  if (bbHere && md.backbone === "ded") {
+    const hs = boardsFor(h0, has(rxBack));
+    for (const h of hs) b.add(G, "kręgosłup {W}{h}F", rxBack(h), m, split(hs, h0, { W, h }));
+    b.hwAdd(HW.m4_long, 4 * hs.length * m, "kręgosłup (długość wg wysokości)");
+  }
+  if (bbHere && md.backbone === "uni") {
+    const hs = boardsFor(h0, has(rxUni));
+    for (const h of hs) b.add(G, "kręgosłup uniwersalny {h}F", rxUni(h), 2 * m, { note: "2 szt. na warstwę (lewa + prawa) – do weryfikacji", v: { h } });
+    b.hwAdd(HW.m4_long, 4 * hs.length * m, "kręgosłup (długość wg wysokości)");
+  }
+  if (md.pegboard !== "none" && bbHere) {  // pegboard przykręca się do kręgosłupa (Modifications 15/15)
+    const hs = boardsFor(h0, has(rxPeg)), kind = md.pegboard === "ikea" ? "IKEA Skådis" : "USSA";
+    for (const h of hs) b.add(G, "pegboard {kind} {W}{h}F", rxPeg(h), m, split(hs, h0, { kind, W, h }));
+    b.hwAdd(HW.m4_40, 4 * hs.length * m, "pegboard");
+  }
+  if (wallOn(st)) {  // w miejscu kręgosłupa (patrz formularz „Tył wieży”); tylko w wieży bez skrzynek
+    const hs = boardsFor(h0, has(rxWall));
+    for (const h of hs) b.add(G, "uchwyt ścienny {W}{h}F", rxWall(h), m, split(hs, h0, { W, h }));
+    // część 2 (na ścianie) – jedna na otwór w uchwycie (pomiar plików 2026-11-01): 1F bez otworu, 2F jeden (L – dwa
+    // obok siebie), 4F dwa rzędy; do 2026-11-01 liczona jedna na uchwyt
+    const hooks = hs.reduce((s, h) => s + (h === 1 ? 0 : (h === 4 ? 2 : 1) * (W === "L" ? 2 : 1)), 0);
+    b.add(G, "uchwyt ścienny – część 2", new RegExp(MOD_DIR + "wall mounts/wall mount second part\\.stl$"), hooks * m, { note: "jedna na otwór w uchwycie (1F – bez otworu)" });
+    b.hwAdd("Kołki/wkręty do ściany", m, "ilość i typ wg ściany");
+    // do modułów – długie śruby w otworach przy bokach uchwytu (Mounting Instructions krok 8): 2 na bok na każde F,
+    // L i XL (dwa moduły S/M obok siebie) – dwa razy tyle (otwory Ø 3,8 policzone w plikach S/M/L/XL 1F–4F, 2026-11-05)
+    b.hwAdd(HW.m4_long, hs.reduce((s, h) => s + 4 * h * (W === "L" || W === "XL" ? 2 : 1), 0) * m, "uchwyt ścienny – do modułów, długość do weryfikacji");
+  }
+}
+
+function addHandleStatic(b, st, m) {
+  const W = baseWidth(st), w = W.toLowerCase();
+  if (st.mods.handleStatic && backOn(st)) {  // na kręgosłupie (formularz „Tył wieży”)
+    b.add("Modyfikacje", "{W} uchwyt stały", new RegExp(MOD_DIR + `stationary handle/${w} stationary handle\\.stl$`), m, { v: { W, d: st.depth } });
+    b.hwAdd(HW.m4_60, 8 * m, "uchwyt stały");
+  }
+}
+function addHandlePull(b, st, m) {
+  const md = st.mods, G = "Modyfikacje", W = baseWidth(st), w = W.toLowerCase(), vw = { W, d: st.depth };
+  if (!pullOn(st)) return;
+  b.add(G, "{W} uchwyt wysuwany", new RegExp(MOD_DIR + `pull-out handle/${w} pull-out handle\\.stl$`), m, { v: vw });
+  if (md.backbone === "uni") b.add(G, "blokada uchwytu (uniwersalna)", new RegExp(MOD_DIR + "backbone/universal pull-out handle lock\\.stl$"), 2 * m, { note: WERYF });
+  else {
+    b.add(G, "{W} blokada uchwytu", new RegExp(MOD_DIR + `backbone/${w} pull-out handle lock\\.stl$`), m, { v: vw });
+    if (W === "S") b.add(G, "S blokada uchwytu cz. 2", new RegExp(MOD_DIR + "backbone/s pull-out handle lock part 2\\.stl$"), m);
+  }
+  b.add(G, "pokrętło blokady cz. 1", new RegExp(MOD_DIR + "backbone/handle lock knob part 1\\.stl$"), 2 * m);
+  b.add(G, "pokrętło blokady cz. 2", new RegExp(MOD_DIR + "backbone/handle lock knob part 2\\.stl$"), 2 * m);
+  b.hwAdd(HW.m6_30, 4 * m, "uchwyt wysuwany");
+  b.hwAdd(HW.m6_35, 2 * m, "uchwyt wysuwany");
+  b.hwAdd(HW.insert, 2 * m, "uchwyt wysuwany");
+  b.hwAdd("Pręt gwintowany M16 (na wysokość wieży)", 2 * m, "uchwyt wysuwany – dociąć, nawiercić i nagwintować M6");
+}
+
+function addStack(b, st) {
+  const m = st.qty, d = st.depth;
+  for (const l of st.layers) {
+    const fams = FAMILIES[l.layout];
+    if (l.type === "D") {
+      addDrawerModule(b, m, l, d);
+      l.cols.forEach((c, i) => c.pattern.forEach((h, k) => addDrawer(b, m, fams[i], d, h, c.pattern.length > 1, c, k)));
+    } else l.cols.forEach((c, i) => addSustainer(b, m, fams[i], d, l.height, c));
+  }
+  addRoof(b, st, m);
+  addBase(b, st, m);
+  for (const l of st.layers) addLayerMods(b, st, l, m);
+  addHandleStatic(b, st, m);
+  addHandlePull(b, st, m);
+}
+
+function buildBom() {
+  const b = new Bom();
+  state.stacks.forEach(st => { normalizeStack(st); addStack(b, st); });
+  // Hidden Key Part 2 to wyjmowana rączka pasująca do wszystkich ukrytych zamków (pomiar plików 2026-11-03: belka w gnieździe
+  // cz. 1, cz. 2 ją obejmuje) – jedna sztuka na projekt, gdy zaznaczone „drukuj klucz” (prośba użytkownika; do tej pory 1 na szufladę)
+  // przyrząd do tulei kół to narzędzie – jeden na cały projekt (2026-11-05; do tej pory jeden na zestaw z kołami)
+  const jig = [...b.parts.values()].find(e => /wheels\/jig\.stl$/.test(norm(e.file)));
+  if (jig) jig.qty = 1;
+  if (state.key === "hidden" && state.keyPrint !== false && [...b.parts.keys()].some(f => /hidden key \(turn on supports\)\.stl$/.test(norm(f))))
+    b.add("Szuflady", "ukryty kluczyk cz. 2", R`^01\. drawers/07\. universal/hidden key part 2 \(turn on supports\)\.stl$`, 1, { note: "drukować z podporami" });
+  for (const e of state.extras) {
+    const n = norm(e.file);
+    b.add("Dodatkowe", e.file.split("/").pop(), new RegExp("^" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$"), e.qty, { raw: true });
+  }
+  if (typeof binAddToBom === "function") binAddToBom(b);  // pojemniki gridfinity z układów (pojemniki.js)
+  if (typeof gdAddToBom === "function") gdAddToBom(b);  // przegródki Grid Dividers z układów (przegrodki.js)
+  if (typeof labAddToBom === "function") labAddToBom(b);  // etykiety z napisem zamiast pustych (etykiety.js)
+  if (typeof logoAddToBom === "function") logoAddToBom(b);  // fronty z logo zamiast frontów USSA (logo.js)
+  // „puste etykiety (Label) na liście części” wyłączone (prośba użytkownika 2026-11-03: „nie drukuj labelek” – zapamiętane
+  // z projektem): bez pustych etykiet szuflad i skrzynek; etykiety z napisem (@etykiety/) zostają
+  if (state.blankLabels === false)
+    for (const f of [...b.parts.keys()]) if (/^01\. drawers\/07\. universal\/label\.stl$|^02\. sustainers\/05\. universal\/label for sustainers\.stl$/.test(norm(f))) b.parts.delete(f);
+  return b;
+}
+
+// ---------- Widok: lista zestawów ----------
+const $ = id => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (k === "checked" || k === "disabled" || k === "selected" || k === "hidden") n[k] = v;
+    else n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k);
+  return n;
+};
+const sel = (value, options, onchange) =>
+  el("select", { onchange: e => onchange(e.target.value) }, options.map(([v, t]) => el("option", { value: v, selected: String(v) === String(value) }, t)));
+const num = (value, onchange, min = 0, max = Infinity) => el("input", { type: "number", min, ...(isFinite(max) ? { max } : {}),
+  value: Math.min(value, max), onchange: e => onchange(Math.min(max, Math.max(min, parseInt(e.target.value) || 0))) });
+// podpowiedź „?” z dymkiem (CSS ::after z data-tip) – tekst już przetłumaczony
+const help = text => el("span", { class: "help", tabindex: 0, role: "img", "aria-label": text, "data-tip": text }, "?");
+// dymek przy prawej krawędzi okna otwiera się w lewo; kliknięcie (dotyk) przełącza dymek, kliknięcie obok zamyka
+const helpSide = e => { const h = e.target.closest && e.target.closest(".help"); if (h) h.classList.toggle("left", h.getBoundingClientRect().left > innerWidth - 320); };
+document.addEventListener("mouseover", helpSide);
+document.addEventListener("focusin", helpSide);
+document.addEventListener("click", e => {
+  const h = e.target.closest && e.target.closest(".help");
+  document.querySelectorAll(".help.open").forEach(x => { if (x !== h) x.classList.remove("open"); });
+  if (h) { helpSide(e); h.classList.toggle("open"); e.preventDefault(); }
+});
+// nazwa pola z podpowiedzią tuż za nią („Wkład: ? [pole]”) – „?” nie spada do osobnej linii w wąskiej kolumnie
+const lab = (text, tip) => el("span", { class: "lab" }, text, help(tip));
+const chk = (checked, label, onchange, disabled = false) =>
+  el("label", {}, el("input", { type: "checkbox", checked, disabled, onchange: e => onchange(e.target.checked) }), " " + label);
+
+function update() { state.stacks.forEach(normalizeStack); save(); render(); }
+
+function renderStacks() {
+  const ul = $("stackList"); ul.replaceChildren();
+  state.stacks.forEach((st, i) => {
+    const desc = `${baseWidth(st)}${st.depth} · ${layersText(st.layers.length)}`;
+    ul.append(el("li", { class: i === state.current ? "active" : "", onclick: () => { state.current = i; update(); } },
+      el("span", {}, st.name, el("div", { class: "meta" }, desc)), el("span", { class: "meta" }, "×" + st.qty)));
+  });
+}
+
+// „1 warstwa / 2 warstwy / 5 warstw” – odmiana polska, w innych językach wg słownika
+function layersText(n) {
+  if (LANG !== "pl") return tr(n === 1 ? "{n} warstwa" : "{n} warstw", { n });
+  const f = n === 1 ? "warstwa" : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? "warstwy" : "warstw";
+  return `${n} ${f}`;
+}
+
+// ---------- Widok: edytor zestawu ----------
+function patternLabel(p) { return p.map(h => h + "F").join(" / "); }
+
+function renderPreview(st) {
+  const scale = 0.62, unit = 22;
+  const box = el("div", { class: "preview" });
+  if (st.mods.base) box.append(el("div", { class: "pv-base", style: `width:${WIDTH_MM[baseWidth(st)] * scale}px` }));
+  const GAP = 4;
+  for (const l of st.layers) {
+    const row = el("div", { class: "pv-layer" });
+    const fams = FAMILIES[l.layout], kind = l.type === "D" ? "d" : "s";
+    const rowW = WIDTH_MM[LAYOUT_WIDTH[l.layout]] * scale;
+    // osobne moduły obok siebie (2× S, S + M) mają własne obudowy; L², XL² i pełne moduły – jedną wspólną
+    const separate = l.layout === "SS" || l.layout === "SM";
+    const housings = separate ? fams.map((_, i) => [i]) : [fams.map((_, i) => i)];
+    const famsMM = fams.reduce((n, f) => n + WIDTH_MM[f], 0);
+    for (const idx of housings) {
+      const mm = idx.reduce((n, i) => n + WIDTH_MM[fams[i]], 0);
+      const w = separate ? (rowW - GAP * (housings.length - 1)) * mm / famsMM : rowW;
+      const tag = l.layout === "L2" ? `L${st.depth}²` : l.layout === "XL2" ? `XL${st.depth}²` : fams[idx[0]] + st.depth;
+      const mod = el("div", { class: "pv-mod " + kind, style: `width:${w}px`, title: `${tag} · ${l.height}F · ${l.type === "D" ? tr("szuflady") : tr("skrzynka")}` },
+        el("span", { class: "pv-tag" }, `${tag} ${l.height}F`));
+      for (const i of idx) {
+        const c = l.cols[i], colEl = el("div", { class: "pv-col", style: `flex:${WIDTH_MM[fams[i]]} 1 0` });
+        for (const h of (l.type === "D" ? c.pattern : [l.height]))
+          colEl.append(el("div", { class: "pv-box " + kind, style: `height:${h * unit}px` }, fams[i] + st.depth + "·" + h + "F"));
+        mod.append(colEl);
+      }
+      row.append(mod);
+    }
+    box.append(row);
+  }
+  const top = st.layers[st.layers.length - 1];
+  if (top && top.type === "D" && st.roof !== "none") box.append(el("div", { class: "pv-roof", style: `width:${WIDTH_MM[baseWidth(st)] * scale}px` }));
+  // pełny widok 3D w osobnym oknie (wizualizacja.js)
+  if (typeof openViz === "function") box.append(el("button", { class: "small viz-open", onclick: () => openViz() }, tr("Wizualizacja 3D")));
+  return box;
+}
+
+function renderColumn(st, l, c, fam, ci) {
+  const box = el("div", { class: "col" }, el("div", { class: "fam" }, fam + st.depth + " · " + (l.type === "D" ? tr("szuflady") : tr("skrzynka"))));
+  if (l.type === "D") {
+    const pats = allowedPatterns("D", l.height);
+    if (pats.length > 1)
+      box.append(el("div", { class: "row" }, lab(tr("Fronty:"), tr("Podział wysokiego modułu na szuflady – np. 1F / 1F to dwie niskie szuflady w jednym module 2F.")),
+        sel(c.pattern.join(","), pats.map(p => [p.join(","), patternLabel(p)]), v => { c.pattern = v.split(",").map(Number); update(); })));
+    // warianty z uchwytami tylko, gdy są w bibliotece (S – 1 i 2 uchwyty, M – 2; L i XL mają jedną płytę)
+    const has = rx => findAll(R`/${fam.toLowerCase()}${st.depth}/gridfinity baseplate/[^/]*${rx}\.stl$`).length > 0;
+    const opts = [["none", tr("puste")], ["grid", "gridfinity baseplate"]];
+    if (has("(with 2 handles|2_handles)")) opts.push(["grid2", tr("gridfinity z 2 uchwytami")]);
+    if (has("with 1 handle")) opts.push(["grid1", tr("gridfinity z 1 uchwytem")]);
+    // przegródki Grid Dividers w otworach dna (przegrodki.js) – zamiast płyty gridfinity, która zasłania otwory
+    opts.push(["dividers", tr("przegródki Grid Dividers")]);
+    const ok = v => opts.some(([o]) => o === v) ? v : "grid";  // zapisany wariant, którego nie ma – zwykła płyta (lista części i tak ją brała)
+    if (!opts.some(([v]) => v === c.insert)) c.insert = "grid";
+    if (Array.isArray(c.ins)) c.ins = c.ins.map(ok);
+    const tip = tr("Płyta gridfinity na dnie pudełka – na niej stoją pojemniki gridfinity (zakładka „Pojemniki gridfinity”); albo przegródki Grid Dividers wsuwane w otwory dna (zakładka „Przegródki”).");
+    // przycisk edytora przy szufladzie: pojemniki gridfinity (pojemniki.js) albo przegródki (przegrodki.js)
+    const edit = k => insGrid(insOf(c, k)) && typeof binButton === "function" ? binButton(st, l, ci, k)
+      : insOf(c, k) === "dividers" && typeof gdButton === "function" ? gdButton(st, l, ci, k) : null;
+    if (c.pattern.length === 1) {
+      box.append(el("div", { class: "row" }, lab(tr("Wkład:"), tip), sel(insOf(c, 0), opts, v => { c.insert = v; delete c.ins; update(); }), edit(0)));
+    } else {
+      // kilka szuflad w module: wkład osobno dla każdej (od góry), przy niej przycisk edytora; „wszystkie” – jeden wkład modułu
+      const same = c.pattern.every((_, k) => insOf(c, k) === insOf(c, 0));
+      box.append(el("div", { class: "row" }, lab(tr("Wkład:"), tip),
+        sel(same ? insOf(c, 0) : "", [...(same ? [] : [["", tr("różne")]]), ...opts], v => { if (v) { c.insert = v; delete c.ins; update(); } }),
+        el("span", { class: "hint" }, tr("wszystkie szuflady"))));
+      c.pattern.forEach((h, k) => box.append(el("div", { class: "row ins-k" }, el("span", { class: "hint" }, tr("szuflada {k} ({h}F):", { k: k + 1, h })),
+        sel(insOf(c, k), opts, v => { c.ins = c.pattern.map((_, j) => insOf(c, j)); c.ins[k] = v; update(); }), edit(k))));
+    }
+  } else {
+    if (fam === "L" || fam === "XL")
+      box.append(el("div", { class: "row" }, lab(tr("Wnętrze:"), tr("Płaskie – gładkie ściany; pod przegródki – rowki na przegródki poprzeczne i podłużne; szczelne – ścianki dzielące skrzynkę na komory.")),
+        sel(c.sInt, [["flat", tr("płaskie (Flat)")], ["dividers", tr("pod przegródki (Dividers)")], ["sealed", tr("szczelne (Sealed)")]], v => { c.sInt = v; update(); })));
+    box.append(el("div", { class: "row" }, chk(!!c.grid, tr("wkład gridfinity"), v => { c.grid = v; update(); }),
+      c.grid && typeof binButton === "function" ? el("span", {}, tr("Pojemniki:") + " ", binButton(st, l, ci, 0)) : null,
+      st.depth >= 6 ? chk(!!c.splitLid, tr("wieko w 2 częściach"), v => { c.splitLid = v; update(); }) : null));
+    // liczby ograniczone do rowków w module (divMax, zgłoszenie użytkownika 2026-11-01: dało się wpisać 8 uszczelniających
+    // do L4, który ma 3 rowki na połówkę); przy zmianie głębokości zapisane liczby zostają, ale lista i widok je przycinają
+    const v = c.div, setv = k => n => { v[k] = n; update(); }, sInt = c.sInt || "flat";
+    const pole = k => { const mx = divMax(fam, st.depth, sInt, k); return [num(v[k] || 0, setv(k), 0, mx), " " + tr("(maks. {n})", { n: mx })]; };
+    if (fam === "S" || fam === "M") box.append(el("div", { class: "row" }, tr("Przegródki:") + " ", pole("n")));
+    // L i XL: przegródki poprzeczne i podłużne tylko we wnętrzu „pod przegródki” (rowki w bokach i nacięcia w tylnej
+    // ścianie), uszczelniające tylko w „szczelnym” (rowki przy środkowej ścianie); płaskie nie ma rowków (zmierzone
+    // w L4 Flat/Dividers/Sealed, zauważył użytkownik 2026-11-01). Liczby zostają w projekcie, ale są pomijane.
+    if ((fam === "L" || fam === "XL") && sInt === "flat")
+      box.append(el("p", { class: "hint" }, tr("Płaskie wnętrze nie ma rowków na przegródki – wybierz „pod przegródki” albo „szczelne”.")));
+    if ((fam === "L" || fam === "XL") && sInt === "dividers")
+      box.append(el("div", { class: "row" }, tr("Przegr. szer.:") + " ", pole("w"), " " + tr("głęb.:") + " ", pole("d")));
+    if (fam === "L" && sInt === "sealed") box.append(el("div", { class: "row" }, tr("Przegr. uszczelniające:") + " ", pole("s")));
+    if (fam === "XL" && sInt === "sealed")
+      box.append(el("div", { class: "row" }, tr("Uszcz. środek:") + " ", pole("sc"), " " + tr("boki:") + " ", pole("ss")));
+  }
+  return box;
+}
+
+function renderLayer(st, l, i) {
+  const n = st.layers.length;
+  const layouts = allowedLayouts(l.type, i ? baseWidth(st) : null);
+  const head = el("div", { class: "layer-head" },
+    el("span", { class: "idx" }, i === 0 ? tr("Warstwa 1 (spód)") : tr("Warstwa {n}", { n: i + 1 })),
+    sel(l.type, [["D", tr("Szuflady")], ["S", tr("Skrzynki (Sustainers)")]], v => { l.type = v; update(); }),
+    sel(l.layout, layouts.map(x => [x, layoutLabel(x)]), v => { l.layout = v; l.cols = FAMILIES[v].map(() => newCol(l.height)); update(); }),
+    sel(l.height, allowedHeights(l.layout).map(h => [h, h + "F"]), v => { l.height = +v; l.cols.forEach(c => c.pattern = [l.height]); update(); }),
+    el("span", { class: "tools" },
+      el("button", { class: "small", title: tr("w górę"), disabled: i === n - 1, onclick: () => { [st.layers[i], st.layers[i + 1]] = [st.layers[i + 1], st.layers[i]]; update(); } }, "▲"),
+      el("button", { class: "small", title: tr("w dół"), disabled: i === 0, onclick: () => { [st.layers[i], st.layers[i - 1]] = [st.layers[i - 1], st.layers[i]]; update(); } }, "▼"),
+      el("button", { class: "small", title: tr("kopiuj warstwę"), onclick: () => {
+        const c = JSON.parse(JSON.stringify(l)); c.id = uid++; st.layers.splice(i + 1, 0, c);
+        if (typeof binCopyLayouts === "function") binCopyLayouts(`i:${st.id}:${l.id}:`, `i:${st.id}:${c.id}:`);  // pojemniki gridfinity też
+        if (typeof gdCopyLayouts === "function") gdCopyLayouts(`i:${st.id}:${l.id}:`, `i:${st.id}:${c.id}:`);  // i przegródki
+        update();
+      } }, "⧉"),
+      el("button", { class: "small", title: tr("usuń"), disabled: n === 1, onclick: () => {
+        histBreak(); st.layers.splice(i, 1); update(); toast(tr("Usunięto warstwę {n}", { n: i + 1 }));
+      } }, "✕")));
+  const cols = el("div", { class: "cols" }, l.cols.map((c, k) => renderColumn(st, l, c, FAMILIES[l.layout][k], k)));
+  // skrzynka na pół szerokości pod inną warstwą: warstwa wyżej jest spięta z wiekiem i z modułem obok, więc wieko się nie odchyli
+  const half = l.type === "S" && FAMILIES[l.layout].length > 1 && i < n - 1;
+  const warn = half ? el("p", { class: "note" }, "⚠ " + tr("Skrzynka na pół szerokości pod inną warstwą nie otworzy się na miejscu: warstwa wyżej jest spięta zatrzaskami z wiekiem i z modułem obok, więc trzeba najpierw zdjąć całą górę wieży. Skrzynka na całą szerokość otwiera się razem z górą (wieko odchyla się z warstwami nad nim).")) : null;
+  return el("div", { class: "layer" + (i === n - 1 ? " top" : "") }, head, cols, warn);
+}
+
+function renderEditor() {
+  const st = cur(), ed = $("editor");
+  const W = baseWidth(st), top = st.layers[st.layers.length - 1];
+  ed.replaceChildren();
+  // pierwsze uruchomienie (jedyny, nietknięty zestaw): zaproszenie do kreatora; „Nie pokazuj” – zapamiętane na tym komputerze
+  if (!state.welcomeOff && state.stacks.length === 1 && typeof krPristine === "function" && krPristine(st))
+    ed.append(el("div", { class: "welcome" },
+      el("b", {}, tr("Pierwszy raz tutaj?")),
+      el("p", {}, tr("Kreator poprowadzi Cię przez 5 kroków: szablon, rozmiar, warstwy od spodu, dach i dodatki – z podglądem i szacunkiem druku. Możesz też od razu edytować „{name}” poniżej.", { name: st.name })),
+      el("div", { class: "row" }, el("button", { class: "primary", onclick: () => openWizard() }, tr("Kreator wieży…")),
+        el("button", { onclick: () => { state.welcomeOff = true; save(); renderEditor(); } }, tr("Nie pokazuj")))));
+  ed.append(el("div", { class: "row" },
+    el("input", { type: "text", value: st.name, onchange: e => { st.name = e.target.value || tr("Zestaw"); update(); } }),
+    el("label", {}, lab(tr("Ilość:"), tr("Ile takich samych wież budujesz – lista części mnoży wszystko przez tę liczbę.")), " ",
+      num(st.qty, v => { st.qty = Math.max(1, v); update(); }, 1)),
+    el("label", {}, lab(tr("Głębokość:"), tr("Głębokość wszystkich modułów wieży w kratkach gridfinity po 42 mm. Moduł jest o 20 mm dłuższy (np. 4 → 188 mm).")), " ",
+      sel(st.depth, [3, 4, 5, 6, 7].map(d => [d, `${d} (${d * 42} mm)`]), v => { st.depth = +v; update(); }))));
+  ed.append(renderPreview(st));
+  ed.append(el("h3", {}, tr("Warstwy (od góry)"), help(tr("Wieża rośnie od spodu. Warstwa to jeden poziom: moduł z szufladami albo skrzynka z wiekiem. Wysokość 1F to 48 mm, 2F i 4F – dwa i cztery razy więcej."))));
+  ed.append(el("div", { class: "row" }, el("button", { class: "primary", onclick: () => {
+    const t = top || { type: "D" };
+    st.layers.push(newLayer(t.type, allowedLayouts(t.type, baseWidth(st))[0], 1)); update();
+  } }, tr("+ Dodaj warstwę na górze"))));
+  for (let i = st.layers.length - 1; i >= 0; i--) ed.append(renderLayer(st, st.layers[i], i));
+  ed.append(el("p", { class: "hint" }, tr("Szerokość wieży wyznacza warstwa 1: L, L² i 2× S dają szerokość L, a XL, XL² i S + M – szerokość XL. Wyżej można łączyć układy tej samej szerokości. XL i XL² występują tylko w 1F.")));
+
+  ed.append(el("h3", {}, tr("Góra")));
+  if (top && top.type === "D") {
+    const roofs = Object.entries(ROOFS).filter(([k]) => k !== "heavy" || W === "L" || W === "XL").map(([k, t]) => [k, tr(t)]);
+    ed.append(el("div", { class: "row" }, lab(tr("Dach:"), tr("Grid – kratki gridfinity na wierzchu, Table – płaski blat, Bowl – misa na drobiazgi, Under Table Mount – mocowanie pod blatem, Heavyweight – wzmocniony, z rączką (tylko L i XL).")),
+      sel(st.roof, roofs, v => { st.roof = v; update(); }),
+      // uchwyt górny tylko z dachem Grid (podstawa 37,1 × 126 mm wchodzi w rząd 3 kratek; inne dachy nie mają kratek ani
+      // otworów – instrukcja 01 s. 10, pomiar 2026-11-02); inny dach – wyszarzony, zapisany wybór czeka (jak koła bez podstawy)
+      el("span", { title: st.roof === "grid" ? "" : tr("Uchwyt górny wchodzi w kratki dachu Grid – wybierz dach Grid.") },
+        chk(st.roof === "grid" && st.topHandle, tr("uchwyt górny (Top Handle)"), v => { st.topHandle = v; update(); }, st.roof !== "grid"))));
+  } else ed.append(el("p", { class: "hint" }, tr("Górna warstwa to skrzynka – jej wieko zamyka wieżę, dach szuflad nie jest potrzebny.")));
+
+  const md = st.mods, setm = k => v => { md[k] = v; update(); };
+  ed.append(el("h3", {}, tr("Modyfikacje")));
+  ed.append(el("fieldset", {}, el("legend", {}, tr("Podstawa")),
+    el("div", { class: "row" }, el("span", {}, chk(md.base, tr("podstawa (Base)"), setm("base")), help(tr("Podstawa pod wieżę z prętem M16 – do niej montuje się koła i stopkę."))),
+      el("span", { title: tr("Podstawa głębokości 6 i 7 ma ok. 280–325 mm długości; USSA daje ją w całości (Whole) albo w 2 częściach (Part 1 + Part 2) dla mniejszych drukarek. Dostępne po zaznaczeniu podstawy przy głębokości 6 lub 7.") },
+        chk(md.baseSplit, tr("w 2 częściach"), setm("baseSplit"), !md.base || st.depth < 6)),
+      // koła (na pręcie M16 przez podstawę) i stopka (przykręcana do podstawy) tylko z podstawą – bez niej pola są
+      // wyszarzone, a zapisany wybór czeka (prośba użytkownika 2026-11-01); lista części i widok 3D też go pomijają
+      el("span", { title: md.base ? "" : tr("Koła i stopka montuje się do podstawy – zaznacz podstawę.") },
+        chk(md.base && md.wheels, tr("koła i stopka"), v => { md.wheels = md.feet = v; update(); }, !md.base)),
+      // Casters Mode (Modifications, ostatnia strona): 4 kółka meblowe z trzpieniem M8 w otworach spodu podstawy – zamiast
+      // kół i stopki (2026-11-04, prośba użytkownika); z kołami albo stopką wyszarzone, zapisany wybór czeka
+      el("span", { title: md.base && !md.wheels && !md.feet ? "" : tr("Kółka meblowe stoją tam, gdzie koła i stopka – zaznacz podstawę i odznacz koła i stopkę.") },
+          chk(castersOn(md), tr("kółka meblowe (Casters Mode)"), setm("casters"), !md.base || md.wheels || md.feet)))));
+  const sust = hasSust(st), bbOk = backOn(st);
+  ed.append(el("fieldset", {}, el("legend", {}, tr("Tył wieży")),
+    el("div", { class: "row" }, lab(tr("Kręgosłup:"), tr("Listwa z tyłu każdej warstwy, która usztywnia wieżę. Przykręca się do niej pegboard i uchwyt wysuwany. Dedykowany – na szerokość wieży, uniwersalny – dwa klocki przy bokach.")),
+      sel(md.backbone, [["none", tr("brak")], ["ded", tr("dedykowany {W}", { W })], ["uni", tr("uniwersalny")]], setm("backbone")),
+      // pegboard przykręca się do kręgosłupa – bez niego wyszarzony, zapisany wybór czeka (jak koła bez podstawy)
+      el("span", { title: bbOk ? "" : tr("Pegboard przykręca się do kręgosłupa – wybierz kręgosłup.") }, "Pegboard: ",
+        Object.assign(sel(bbOk ? md.pegboard : "none", [["none", tr("brak")], ["ikea", "IKEA Skådis"], ["ussa", "USSA"]], setm("pegboard")), { disabled: !bbOk }))),
+    sust && md.backbone !== "none" ? el("p", { class: "hint" }, bbLayers(st)
+      ? tr("Kręgosłup tylko na warstwach szuflad pod pierwszą skrzynką – zawiasy skrzynki wystają za moduł, a wieko odchyla się do tyłu razem z górą wieży.")
+      : tr("Kręgosłup nie mieści się przy skrzynce na spodzie wieży – zawiasy skrzynki wystają za moduł; jest pomijany.")) : null,
+    // uchwyt stały przykręca się od drugiej strony kręgosłupa (Modifications 12/15, krok 15) – bez kręgosłupa wyszarzony,
+    // zapisany wybór czeka (2026-11-04, decyzja użytkownika); razem z wysuwanym – tak (rysunki kroków 17–20)
+    el("div", { class: "row" }, el("span", { title: bbOk ? "" : tr("Uchwyt stały przykręca się do kręgosłupa – wybierz kręgosłup.") },
+        chk(md.handleStatic && bbOk, tr("uchwyt stały"), setm("handleStatic"), !bbOk)),
+      el("span", { title: sust ? tr("Pręty uchwytu wysuwanego idą przez całą wysokość wieży – przy skrzynce przeszkadzają zawiasom i wieku; tylko w wieży bez skrzynek.") : "" },
+        chk(md.handlePull && !sust, tr("uchwyt wysuwany"), setm("handlePull"), sust)),
+      // uchwyt ścienny przykręca się do tyłu modułów tam, gdzie kręgosłup (Mounting Instructions 1 i 8) – z kręgosłupem
+      // (a więc i z pegboardem) wyszarzony, zapisany wybór czeka (uwaga użytkownika 2026-11-04)
+      el("span", { title: sust ? tr("Uchwyt ścienny tylko w wieży bez skrzynek – zawiasy skrzynki wchodzą w płytę uchwytu, a wieko nie otworzy się przy ścianie.")
+          : md.backbone === "none" ? "" : tr("Uchwyt ścienny przykręca się do tyłu modułów w miejscu kręgosłupa – wybierz kręgosłup „brak”.") },
+        chk(wallOn(st), tr("uchwyty ścienne"), setm("wall"), md.backbone !== "none" || sust)),
+      help(tr("Uchwyt stały – na tyle wieży; wysuwany – rączka na prętach M16 przez kręgosłup (jak w walizce); ścienne – do zawieszenia warstw na ścianie.")))));
+  if (pullOn(st) && md.backbone === "none") ed.append(el("p", { class: "err" }, tr("Uchwyt wysuwany montuje się na kręgosłupie – wybierz kręgosłup.")));
+}
+
+// ---------- Dodatkowe pliki ----------
+function renderExtras() {
+  const box = $("extrasList"); box.replaceChildren();
+  state.extras.forEach((e, i) => box.append(el("div", { class: "row" },
+    num(e.qty, v => { e.qty = v; update(); }, 1),
+    el("span", { title: e.file, style: "flex:1;font-size:12px" }, e.file.split("/").slice(-2).join(" / ")),
+    el("button", { class: "small", title: tr("usuń"), onclick: () => { histBreak(); state.extras.splice(i, 1); update(); toast(tr("Usunięto plik z listy")); } }, "✕"))));
+}
+$("extraSearch").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase().split(/\s+/).filter(Boolean), res = $("extraResults");
+  res.replaceChildren();
+  if (!q.length) { res.hidden = true; return; }
+  const hits = CATALOG.filter(f => q.every(t => f.n.includes(t))).slice(0, 60);
+  res.hidden = false;
+  if (!hits.length) res.append(el("div", {}, tr("brak wyników")));
+  for (const h of hits) res.append(el("div", {}, el("span", { title: h.p }, h.p.split("/").slice(-2).join(" / ")),
+    el("button", { class: "small", onclick: () => {
+      const ex = state.extras.find(x => x.file === h.p);
+      if (ex) ex.qty++; else state.extras.push({ file: h.p, qty: 1 });
+      update();
+    } }, "+")));
+});
+
+// ---------- Wynik ----------
+const GROUP_ORDER = ["Szuflady", "Wkłady", "Przegródki Grid Dividers", "Pojemniki gridfinity", "Etykiety z napisem", "Skrzynki", "Przegródki", "Dachy", "Modyfikacje", "Dodatkowe"];
+function sortedParts(b) {
+  const arr = [...b.parts.values()];
+  for (const e of arr) e.group = GROUP_ORDER.find(g => e.groups.has(g)) || [...e.groups][0];
+  return arr.sort((a, c) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(c.group) || a.file.localeCompare(c.file, LANG));
+}
+
+// Dokleja do pozycji szacunek (na całą ilość, z mnożnikiem czasu) i liczy sumy
+function withEstimates(parts) {
+  const tot = { sec: 0, g: 0, ussa: 0, calc: 0, geom: 0, none: 0 };
+  for (const e of parts) {
+    const est = e.missing ? null : estimate(e.file);
+    e.est = est && { sec: est.sec * state.speed, g: est.g, src: est.src };
+    if (!e.est) { tot.none += e.qty; continue; }
+    tot.sec += e.est.sec * e.qty; tot.g += e.est.g * e.qty; tot[e.est.src] += e.est.g * e.qty;
+  }
+  return tot;
+}
+
+// wydrukowane sztuki (prośba użytkownika 2026-11-02: druk całej wieży trwa dni – co już jest gotowe): state.done {plik: n},
+// zapisywane z projektem; liczy się najwyżej tyle, ile jest na liście części (po zmianie konfiguracji nadwyżka czeka)
+const doneOf = e => Math.min(e.qty, Math.max(0, parseInt((state.done || {})[e.file]) || 0));
+function setDone(file, n) {
+  state.done = state.done || {};
+  if (n > 0) state.done[file] = n; else delete state.done[file];
+  save(); renderResult();
+}
+// filament według koloru (prośba użytkownika 2026-11-03: ile którego koloru kupić i ile jeszcze zostało do wydruku):
+// kolory części z „Przygotuj wydruk” (partColor), opony osobno – TPU; pokazywane, gdy jest więcej niż jeden rodzaj.
+// Litery etykiet i napisów wpuszczonych (drugi filament) – pomijalne, niewliczone.
+function filamentBox(parts) {
+  if (!PRINT) return null;
+  const kinds = new Map();
+  for (const e of parts) {
+    if (!e.est) continue;
+    const tpu = /tpu/.test(norm(e.file)), c = partColor(e.file), k = (tpu ? "T" : "P") + c;
+    const s = kinds.get(k) || { tpu, c, g: 0, left: 0 };
+    s.g += e.est.g * e.qty; s.left += e.est.g * (e.qty - doneOf(e));
+    kinds.set(k, s);
+  }
+  if (kinds.size < 2) return null;
+  const list = [...kinds.values()].sort((a, c) => a.tpu - c.tpu || c.g - a.g);
+  return el("div", { class: "row fil" }, el("span", {}, tr("Filament według koloru:")), list.map(s => {
+    const name = (s.tpu ? "TPU " : "") + (s.c ? colorName(s.c) : tr("bez wybranego koloru"));
+    const sw = /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(s.c) ? s.c : "transparent";
+    return el("span", { class: "fil-chip", title: tr("szpule po 1 kg: {n}", { n: Math.max(1, Math.ceil((s.left < s.g ? s.left : s.g) / 1000)) }) },
+      el("span", { class: "sw", style: "background:" + sw }), name + " ≈ " + fmtG(s.g) +
+      (s.left < s.g - 0.5 ? " · " + tr("zostało ≈ {mass}", { mass: fmtG(s.left) }) : ""));
+  }));
+}
+function renderResult() {
+  const b = buildBom(), box = $("result");
+  const parts = sortedParts(b), hw = [...b.hw.values()].sort((a, c) => a.name.localeCompare(c.name, LANG));
+  const pieces = parts.reduce((n, e) => n + e.qty, 0), missing = parts.filter(e => e.missing).length;
+  const tot = withEstimates(parts);
+  const share = tot.g ? Math.round(100 * (tot.ussa + tot.calc) / tot.g) : 0;
+  $("summary").replaceChildren(
+    el("span", {}, tr("{files} różnych plików · {pieces} wydruków (plików do wrzucenia na stół) · {hw} pozycji niedrukowanych", { files: parts.length, pieces, hw: hw.length })),
+    PRINT ? el("div", { style: "margin-top:4px;font-size:15px" },
+      el("b", {}, tr("≈ {time} druku · ≈ {mass} filamentu · ≈ {cost} zł", { time: fmtTime(tot.sec), mass: fmtG(tot.g),
+        cost: (tot.g / 1000 * state.price).toLocaleString(locale(), { maximumFractionDigits: 0 }) })),
+      el("div", { class: "hint" }, tr("{share}% masy z arkusza USSA (Bambu H2S, basic), reszta oszacowana z geometrii STL. Czas × {speed}. Bez podpór i wymian płyty.", { share, speed: state.speed })))
+      : el("div", { class: "hint" }, tr("Brak pliku dane_druku.js – uruchom „python kalibruj.py”, aby zobaczyć szacunek druku.")),
+    ...(() => {  // postęp druku: wydrukowane sztuki i to, co zostało
+      const dn = parts.reduce((n, e) => n + doneOf(e), 0);
+      if (!dn) return [];
+      const left = parts.reduce((a, e) => e.est ? [a[0] + e.est.sec * (e.qty - doneOf(e)), a[1] + e.est.g * (e.qty - doneOf(e))] : a, [0, 0]);
+      return [el("div", { class: "row done-sum" },
+        el("progress", { max: pieces, value: dn }),
+        el("span", {}, tr("Wydrukowano {done} z {pieces}", { done: dn, pieces }) + (PRINT && dn < pieces ? " · " + tr("zostało ≈ {time} · ≈ {mass}", { time: fmtTime(left[0]), mass: fmtG(left[1]) }) : "")),
+        el("button", { class: "small", onclick: () => { histBreak(); state.done = {}; save(); renderResult(); toast(tr("Wyzerowano licznik wydrukowanych części")); } }, tr("Wyzeruj")))];
+    })(),
+    ...(missing ? [el("div", { class: "err" }, tr("{n} pozycji bez pasującego pliku – zaznaczone na czerwono.", { n: missing }))] : []),
+    // replaceChildren zamienia null na tekst „null” – puste pola pomijane
+    ...[filamentBox(parts), issuesBox(parts)].filter(Boolean));
+  document.querySelectorAll(".tabs button[data-tab]").forEach(btn => btn.classList.toggle("on", btn.dataset.tab === state.tab));
+  $("btnCsv").hidden = state.tab !== "print" && state.tab !== "hw";  // CSV to eksport list części
+  if (state.tab === "print") {
+    const tb = el("tbody"), PL = state.plates && state.plates.map ? state.plates : null;
+    let g = null, stale = 0;
+    for (const e of parts) {
+      if (e.group !== g) {
+        g = e.group;
+        const gs = parts.filter(x => x.group === g && x.est).reduce((a, x) => [a[0] + x.est.sec * x.qty, a[1] + x.est.g * x.qty], [0, 0]);
+        tb.append(el("tr", { class: "grp" }, el("td", { colspan: PL ? 5 : 4 }, tr(g)), el("td", { class: "q" }, PRINT ? `${fmtTime(gs[0])} · ${fmtG(gs[1])}` : "")));
+      }
+      const name = e.missing ? e.file.slice(1) : e.file.split("/").pop();
+      const path = e.missing ? tr("nie znaleziono pliku") : e.gen ? (e.file.startsWith("@przegrodki/") ? tr("generuje konfigurator (zakładka „Przegródki”)") : e.file.startsWith("@etykiety/") || e.file.startsWith("@logo/") ? tr("generuje konfigurator (zakładka „Etykiety”)") : tr("generuje konfigurator (zakładka „Pojemniki gridfinity”)")) : e.file.split("/").slice(0, -1).join(" / ");
+      const d = doneOf(e), pc = PL ? plateCell(e, d) : null;
+      if (pc && pc.stale) stale++;
+      tb.append(el("tr", { class: e.missing ? "missing" : d >= e.qty ? "done" : "" },
+        el("td", { class: "q" }, "×" + e.qty),
+        // licznik wydrukowanych: pole (0…ilość) i ✓ – wszystkie / żadne
+        el("td", { class: "done-cell" }, e.missing ? "" : [
+          Object.assign(num(d, v => setDone(e.file, v), 0, e.qty), { title: tr("wydrukowane sztuki") }),
+          el("button", { class: "small" + (d >= e.qty ? " on" : ""), title: d >= e.qty ? tr("oznacz jako niewydrukowane") : tr("oznacz wszystkie jako wydrukowane"),
+            onclick: () => setDone(e.file, d >= e.qty ? 0 : e.qty) }, "✓")]),
+        pc ? pc.td : null,
+        // najechanie na nazwę – miniatura części (wizualizacja.js, THUMB); pliki generowane – z parametrów
+        el("td", { class: "fname" }, e.missing || WEB ? name : e.gen ? (THUMB.gen.set(e.file, e.gen), el("span", { "data-thumb": e.file }, name))
+          : el("a", { href: fileUrl(e.file), target: "_blank", "data-thumb": e.file }, name),
+          el("div", { class: "path" }, path)),
+        el("td", {}, el("div", { class: "used" }, [...e.labels].join(", ")), [...e.notes].map(n => el("div", { class: "note" }, n)), e.gen ? null : docLinks(partRefs(e.file))),
+        el("td", { class: "est " + (e.est ? e.est.src : ""), title: e.est ? tr("1 szt.: {time}, {g} g – {src}", { time: fmtTime(e.est.sec), g: Math.round(e.est.g), src: tr(SRC_LABEL[e.est.src]) }) : "" },
+          e.est ? [el("div", {}, fmtTime(e.est.sec * e.qty)), el("div", {}, fmtG(e.est.g * e.qty))] : "–")));
+    }
+    const plHint = PL ? el("p", { class: "hint" + (stale ? " err" : "") },
+      tr("Kolumna „Płyta”: numery płyt 3MF z ostatniego przygotowania wydruku ({date}).", { date: new Date(PL.t).toLocaleString(locale()) }) + " " +
+        (stale ? tr("Lista części zmieniła się od tamtej pory ({n} poz.) – przygotuj wydruk ponownie.", { n: stale }) + " " : ""),
+      el("button", { class: "small", onclick: () => { histBreak(); delete state.plates; save(); renderResult(); toast(tr("Usunięto numery płyt z listy")); } }, tr("Ukryj płyty"))) : null;
+    box.replaceChildren(...[plHint, el("div", { class: "tscroll" }, el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, tr("Ilość")), el("th", {}, tr("Wydrukowano")),
+      PL ? el("th", { title: tr("płyta 3MF z ostatniego przygotowania wydruku (najedź, aby zobaczyć nazwę pliku)") }, tr("Płyta")) : null, el("th", {}, tr("Plik")), el("th", {}, tr("Do czego / uwagi")),
+      el("th", { class: "q", title: tr("● z arkusza USSA · ○ szacunek z geometrii") }, tr("Czas · filament")))), tb)),
+      el("p", { class: "hint" }, tr("Czas i filament dotyczą całej ilości w wierszu; najedź na wartość, aby zobaczyć dane dla 1 sztuki.") + " ",
+        el("span", { class: "est ussa" }, tr("z arkusza USSA")), " · ", el("span", { class: "est geom" }, tr("szacunek z geometrii STL")), "."),
+      nextSteps("hw", "bins", "labels", "job")].filter(Boolean));
+  } else if (state.tab === "job") {
+    renderJob(box, parts);
+  } else if (state.tab === "bins") {
+    renderBins(box);
+    box.append(nextSteps("labels", "job"));
+  } else if (state.tab === "gd") {
+    renderGd(box);
+    box.append(nextSteps("bins", "labels", "job"));
+  } else if (state.tab === "asm") {
+    renderAsm(box);
+  } else if (state.tab === "labels") {
+    renderLabels(box);
+    box.append(nextSteps("bins", "job"));
+  } else {
+    const tb = el("tbody");
+    for (const e of hw) tb.append(el("tr", {}, el("td", { class: "q" }, "×" + e.qty), el("td", {}, e.name),
+      el("td", { class: "used" }, [...e.notes].join(", "), docLinks([...(e.refs || []), ["01", 3]]))));
+    box.replaceChildren(el("div", { class: "tscroll" }, el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, tr("Ilość")), el("th", {}, tr("Element")), el("th", {}, tr("Do czego")))), tb)),
+      el("p", { class: "hint" }, tr("Ilości wg tabeli „Hardware List” z instrukcji. Opony drukuje się z TPU. Pręty M16 do uchwytu wysuwanego trzeba dociąć do wysokości wieży.")),
+      nextSteps("print", "bins", "labels", "job"));
+  }
+}
+// Uwagi do projektu w jednym miejscu (od 2026-11-03, praca nad spójnością): ostrzeżenia, które wcześniej były tylko przy
+// swoim polu w edytorze albo w zakładce pojemników. „Pokaż” wybiera zestaw (i przewija do edytora) albo otwiera układ pojemników.
+// części z biblioteki, które nie zmieszczą się na stole drukarki z „Przygotuj wydruk” (wymiary pliku z VAULT_GEOM,
+// obrót o 90° dozwolony, pojedyncza duża część – większy obszar area_max jak w druk.py); druk.py daje im płyty „za duże”
+function tooBigParts(parts) {
+  const j = state.job, pr = PRINTERS[j.printer];
+  const A = pr ? pr.area_max || pr.area : [0, 0, j.bed[0], j.bed[1]], H = pr ? pr.h : j.bed[2];
+  const w = A[2] - A[0] + 0.05, d = A[3] - A[1] + 0.05;
+  return parts.filter(e => {
+    const g = !e.missing && !e.gen && GEOM[e.file];
+    return g && (g[4] > H + 0.05 || !((g[2] <= w && g[3] <= d) || (g[3] <= w && g[2] <= d)));
+  });
+}
+function projectIssues(parts) {
+  const out = [], showStack = i => () => { state.current = i; update(); $("editor").scrollIntoView({ behavior: "smooth" }); };
+  state.stacks.forEach((st, i) => {
+    const md = st.mods, name = st.name;
+    if (pullOn(st) && md.backbone === "none") out.push({ msg: tr("„{name}”: uchwyt wysuwany montuje się na kręgosłupie – wybierz kręgosłup.", { name }), go: showStack(i) });
+    if (md.base && md.casters && (md.wheels || md.feet)) out.push({ msg: tr("„{name}”: kółka meblowe stoją tam, gdzie koła i stopka – przy kołach albo stopce są pomijane.", { name }), go: showStack(i) });
+    if (!md.base && (md.wheels || md.feet)) out.push({ msg: tr("„{name}”: koła i stopka montuje się do podstawy – bez niej są pomijane.", { name }), go: showStack(i) });
+    if (md.handleStatic && md.backbone === "none" && !hasSust(st)) out.push({ msg: tr("„{name}”: uchwyt stały przykręca się do kręgosłupa – bez niego jest pomijany.", { name }), go: showStack(i) });
+    if (md.wall && md.backbone !== "none") out.push({ msg: tr("„{name}”: uchwyt ścienny przykręca się do tyłu modułów w miejscu kręgosłupa – z kręgosłupem jest pomijany.", { name }), go: showStack(i) });
+    if (md.backbone === "none" && md.pegboard && md.pegboard !== "none") out.push({ msg: tr("„{name}”: pegboard przykręca się do kręgosłupa – bez niego jest pomijany.", { name }), go: showStack(i) });
+    if (hasSust(st)) {  // zawiasy skrzynek za tyłem modułu (pomiar 2026-11-06)
+      if (md.wall && md.backbone === "none") out.push({ msg: tr("„{name}”: uchwyt ścienny tylko w wieży bez skrzynek – zawiasy skrzynki wchodzą w płytę uchwytu; jest pomijany.", { name }), go: showStack(i) });
+      if (md.handlePull) out.push({ msg: tr("„{name}”: uchwyt wysuwany tylko w wieży bez skrzynek – pręty przez całą wysokość przeszkadzają zawiasom; jest pomijany.", { name }), go: showStack(i) });
+      if (md.backbone !== "none") out.push({ msg: bbLayers(st)
+        ? tr("„{name}”: kręgosłup tylko na warstwach szuflad pod pierwszą skrzynką – wyżej jest pomijany.", { name })
+        : tr("„{name}”: kręgosłup nie mieści się przy skrzynce na spodzie wieży – jest pomijany razem z pegboardem i uchwytem stałym.", { name }), go: showStack(i) });
+    }
+    st.layers.forEach((l, li) => {
+      if (l.type === "S" && FAMILIES[l.layout].length > 1 && li < st.layers.length - 1)
+        out.push({ msg: tr("„{name}”, warstwa {n}: skrzynka na pół szerokości pod inną warstwą nie otworzy się na miejscu.", { name, n: li + 1 }), go: showStack(i) });
+    });
+  });
+  // pojemniki poza siatką szuflady (po zmianie szuflady albo głębokości) – nie trafiają na listę części ani do 3MF
+  if (Array.isArray(state.binSets) && typeof binInstances === "function") {
+    const inst = new Map(binInstances().map(x => [x.key, x]));
+    for (const s of state.binSets) {
+      const t = inst.get(s.key) ? inst.get(s.key).t : s.key.startsWith("m:") ? s.t : null;
+      const bad = t ? s.items.filter(it => !binInside(it, binTargetFix(t))).length : 0;
+      if (bad) out.push({ msg: tr("Pojemniki poza siatką płyty: {n} – nie trafiają na listę części (zakładka „Pojemniki gridfinity”).", { n: bad }),
+        go: () => { state.tab = "bins"; state.binCur = s.key; update(); } });
+      // za wysokie (np. po zmianie szuflady na niższą) – są na liście części, ale nie zmieszczą się pod frontem wyżej
+      const tall = t ? s.items.filter(it => binInside(it, binTargetFix(t)) && it.p && it.p.h > binMaxH(binTargetFix(t), it.p.rant)).length : 0;
+      if (tall && !s.off) out.push({ msg: tr("Pojemniki wyższe niż miejsce w szufladzie albo skrzynce: {n} (zakładka „Pojemniki gridfinity”).", { n: tall }),
+        go: () => { state.tab = "bins"; state.binCur = s.key; update(); } });
+    }
+  }
+  if (typeof gdIssues === "function") out.push(...gdIssues());
+  const lab = typeof labMismatch === "function" && labMismatch();
+  if (lab) out.push({ msg: lab, go: () => { state.tab = "labels"; update(); } });
+  // litery etykiet niższe niż 3 mm (rzut z serwera – etykiety.js) – słabo czytelne
+  const small = typeof labSmallLetters === "function" ? labSmallLetters() : [];
+  if (small.length) out.push({ msg: tr("Etykiety z literami niższymi niż 3 mm: {n} – skróć napis albo podziel go na 2 linie.", { n: small.length }),
+    go: () => { state.tab = "labels"; state.labelCur = state.labels.indexOf(small[0]); update(); } });
+  // za duże na wybraną drukarkę (zgłoszenia: XL na H2D, L² 2F na stołach 256 mm)
+  const big = parts ? tooBigParts(parts) : [];
+  if (big.length) {
+    const pr = PRINTERS[state.job.printer], fmt = v => v.toLocaleString(locale(), { maximumFractionDigits: 1 });
+    const list = big.slice(0, 3).map(e => { const g = GEOM[e.file]; return `${e.file.split("/").pop()} (${fmt(g[2])} × ${fmt(g[3])} × ${fmt(g[4])} mm)`; }).join(", ")
+      + (big.length > 3 ? " " + tr("i {n} innych", { n: big.length - 3 }) : "");
+    out.push({ msg: tr("Za duże na drukarkę {printer}: {list} – dostaną płyty „za duże”; wybierz większą drukarkę albo wersję dzieloną.",
+      { printer: pr ? pr.name : tr("własny stół"), list }), go: () => { state.tab = "job"; update(); } });
+  }
+  return out;
+}
+function issuesBox(parts) {
+  const list = projectIssues(parts);
+  if (!list.length) return null;
+  // rozwinięcie zostaje po przerysowaniu wyniku (każda zmiana w projekcie)
+  return Object.assign(el("details", { class: "issues", ontoggle: e => { issuesBox.open = e.target.open; } },
+    el("summary", {}, "⚠ " + tr("Uwagi do projektu: {n}", { n: list.length })),
+    el("ul", {}, list.map(x => el("li", {}, x.msg, " ", x.go ? el("button", { class: "small", onclick: x.go }, tr("Pokaż")) : null)))), { open: !!issuesBox.open });
+}
+// przyciski „Następny krok” na dole zakładki – te same nazwy co zakładki; ostatni krok (przygotowanie wydruku) wyróżniony
+const TAB_NAMES = { print: "Do druku", hw: "Niedrukowane", bins: "Pojemniki gridfinity", gd: "Przegródki", labels: "Etykiety", job: "Przygotuj wydruk", asm: "Składanie" };
+function nextSteps(...tabs) {
+  return el("div", { class: "next-steps" }, el("span", { class: "lbl" }, tr("Następny krok:")),
+    tabs.map(t => el("button", { class: t === "job" ? "primary" : "", onclick: () => { state.tab = t; update(); window.scrollTo({ top: 0, behavior: "smooth" }); } },
+      tr(TAB_NAMES[t]) + (t === "job" ? " ›" : ""))));
+}
+
+// ---------- CSV ----------
+// średnik tam, gdzie przecinek jest separatorem dziesiętnym (Excel PL/DE)
+const csvSep = () => (LANG === "en" || LANG === "zh" ? "," : ";");  // przecinek dziesiętny (pl, de, fr, es) – średnik
+function csvCell(v) { const s = String(v); return s.includes(csvSep()) || /["\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function csvText() {
+  const b = buildBom(), parts = sortedParts(b), tot = withEstimates(parts);
+  const dec = (v, n = 1) => v.toLocaleString(locale(), { maximumFractionDigits: n, useGrouping: false });
+  const rows = [["Sekcja", "Grupa", "Ilość", "Plik", "Folder", "Do czego", "Uwagi", "Czas 1 szt. [min]", "Filament 1 szt. [g]", "Czas razem [h]", "Filament razem [g]", "Źródło szacunku", "Wydrukowano"].map(h => tr(h))];
+  for (const e of parts) {
+    const name = e.missing ? e.file.slice(1) : e.file.split("/").pop();
+    const dir = e.missing ? tr("BRAK PLIKU") : e.file.split("/").slice(0, -1).join("/");
+    const est = e.est ? [dec(e.est.sec / 60, 0), dec(e.est.g), dec(e.est.sec * e.qty / 3600, 2), dec(e.est.g * e.qty), tr(SRC_LABEL[e.est.src])] : ["", "", "", "", ""];
+    rows.push([tr("Do druku"), tr(e.group), e.qty, name, dir, [...e.labels].join(", "), [...e.notes].join(", "), ...est, e.missing ? "" : doneOf(e)]);
+  }
+  rows.push([tr("Do druku"), tr("RAZEM"), parts.reduce((n, e) => n + e.qty, 0), "", "", "",
+    tr("mnożnik czasu {speed}; ok. {cost} zł przy {price} zł/kg", { speed: state.speed, cost: dec(tot.g / 1000 * state.price, 0), price: state.price }), "", "", dec(tot.sec / 3600, 1), dec(tot.g, 0), "",
+    parts.reduce((n, e) => n + doneOf(e), 0)]);
+  for (const e of [...b.hw.values()].sort((a, c) => a.name.localeCompare(c.name, LANG)))
+    rows.push([tr("Niedrukowane"), "", e.qty, e.name, "", [...e.notes].join(", "), ""]);
+  rows.push([]);
+  rows.push([tr("Zestawy")]);
+  for (const st of state.stacks) rows.push(["", st.name, st.qty, `${baseWidth(st)}${st.depth}`, st.layers.map(l => layoutLabel(l.layout) + " " + l.height + "F " + (l.type === "D" ? tr("szuflady") : tr("skrzynki"))).join(" | ")]);
+  return rows.map(r => r.map(csvCell).join(csvSep())).join("\r\n");
+}
+function exportCsv() {
+  download(new Blob(["﻿" + csvText()], { type: "text/csv;charset=utf-8" }), tr("vault-lista.csv"));
+}
+
+// ---------- Przygotowanie wydruku (kopiowanie STL + płyty 3MF przez serwer.py) ----------
+const PRINTERS = window.VAULT_PRINTERS || {};
+// Część obszaru dyszy symetryczna względem środka stołu – Bambu Studio centruje import na środku stołu (jak w druk.py)
+const symArea = p => {
+  const cx = p.bed[0] / 2, cy = p.bed[1] / 2, [x0, y0, x1, y1] = p.area;
+  const hw = Math.min(cx - x0, x1 - cx), hh = Math.min(cy - y0, y1 - cy);
+  return [cx - hw, cy - hh, cx + hw, cy + hh];
+};
+const printerLabel = p => {
+  const [x0, y0, x1, y1] = symArea(p), r = n => +n.toFixed(1);
+  return `${p.name.includes(" – ") ? tr(p.name) : p.name} (${r(x1 - x0)}×${r(y1 - y0)}×${p.h})`;
+};
+const defaultJobName = () => (state.stacks.length === 1 ? state.stacks[0].name : state.stacks.map(s => s.name).join(" + ")).slice(0, 60);
+const SERVER = { checked: false, ok: false, status: null, timer: null };
+
+async function api(path, body) {
+  // X-Lang: serwer odpowiada (błędy, postęp, ostrzeżenia, plyty.txt) w języku konfiguratora
+  const headers = { "X-Lang": LANG };
+  const r = await fetch(path, body ? { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) } : { headers });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+async function checkServer() {
+  if (location.protocol === "file:" || WEB) {
+    SERVER.checked = true;
+    if (WEB) {  // numer wersji strony (tools/strona.py) zamiast numeru z serwera
+      SERVER.numer = (window.VAULT_WEB && window.VAULT_WEB.wersja) || "";
+      $("hdrVer").textContent = [SERVER.numer, "online"].filter(Boolean).join(" · ");
+      document.title = tr("Konfigurator VAULT") + (SERVER.numer ? " " + SERVER.numer : "") + " online";
+      renderLibrary();
+    }
+    return;
+  }
+  SERVER.lang = LANG;  // komunikaty z pingu (np. o folderze biblioteki) są w tym języku
+  try {
+    const ping = await api("/api/ping");
+    SERVER.ok = true;
+    // serwer uruchomiony ze starszą wersją programu ma inne definicje drukarek albo ustawienia bez „zeskanowano” – trzeba go zrestartować
+    SERVER.stale = JSON.stringify(ping.printers) !== JSON.stringify(PRINTERS) || !ping.settings || !("zeskanowano" in ping.settings);
+    SERVER.settings = ping.settings || null;
+    SERVER.wersja = ping.wersja || "";
+    // numer wersji w nazwie programu i w tytule karty (bez skrótu commita – ten jest w panelu Biblioteka)
+    SERVER.numer = SERVER.wersja.replace(/\s*\(.*\)\s*$/, "");
+    $("hdrVer").textContent = SERVER.numer;
+    document.title = tr("Konfigurator VAULT") + (SERVER.numer ? " " + SERVER.numer : "");
+    SERVER.wybor = !!ping.wybor;  // serwer umie otworzyć systemowe okno wyboru folderu
+    SERVER.otworz = ping.otworz !== false;  // serwer umie otworzyć folder w systemie (nie: NAS, kontener Dockera); starszy serwer – tak
+    SERVER.pojemniki = ping.pojemniki;  // manifold3d na serwerze: true/false, brak pola = serwer starszy niż zakładka pojemników
+    SERVER.pojemnikiWer = ping.pojemniki_wersja || 1;  // wersja generatora (pojemniki.WERSJA)
+    SERVER.status = await api("/api/druk");
+  } catch { SERVER.ok = false; }
+  SERVER.checked = true;
+  renderLibrary();
+  if (SERVER.status && SERVER.status.running) pollJob();
+  if (SERVER.ok && !UPD.info) checkUpdate();
+}
+
+// ---------- Aktualizacje (aktualizacja.py: GitHub raz na dobę, instalator bez pytań) ----------
+const UPD = { info: null, hidden: false, details: false, busy: false, msg: "", checking: false };
+async function checkUpdate(now) {
+  UPD.checking = true; renderLibrary();
+  try { UPD.info = await api("/api/aktualizacja" + (now ? "?teraz=1" : "")); } catch (e) { UPD.info = { blad: e.message }; }
+  UPD.checking = false;
+  renderUpdate(); renderLibrary();
+}
+async function startUpdate() {
+  const i = UPD.info;
+  if (!confirm(tr("Zaktualizować do wersji {v}? Serwer konfiguratora uruchomi się ponownie, projekt zostaje zapisany w przeglądarce.", { v: i.najnowsza }))) return;
+  try {
+    const r = await api("/api/aktualizacja", { aktualizuj: true });
+    UPD.busy = true;
+    UPD.msg = r.okno ? tr("Instalator działa w osobnym oknie konsoli. Ta strona przeładuje się sama, gdy nowa wersja wystartuje.")
+                     : tr("Pobieram i instaluję nową wersję…");
+  } catch (e) { alert(e.message); return; }
+  renderUpdate();
+  const old = SERVER.wersja, start = Date.now();
+  const poll = async () => {
+    try {
+      const ping = await api("/api/ping");
+      if (ping.wersja && ping.wersja !== old) { location.reload(); return; }
+      const st = await api("/api/druk");  // macOS/Linux: postęp zadania instalatora
+      if (st.kind === "aktualizacja") {
+        if (st.error) { UPD.busy = false; UPD.msg = ""; renderUpdate(); alert(tr("Aktualizacja nie powiodła się:") + " " + st.error); return; }
+        if (st.step) { UPD.msg = tr("Pobieram i instaluję nową wersję…") + " " + st.step; renderUpdate(); }
+      }
+    } catch { /* serwer w trakcie restartu */ }
+    if (Date.now() - start > 180000) { UPD.msg = tr("Nowa wersja nie wystartowała – sprawdź okno instalatora albo uruchom program ponownie."); renderUpdate(); return; }
+    setTimeout(poll, 2000);
+  };
+  setTimeout(poll, 2000);
+}
+function renderUpdate() {
+  const box = $("updBox"), i = UPD.info;
+  if (!i || !i.nowa || (UPD.hidden && !UPD.busy)) { box.replaceChildren(); return; }
+  const out = [el("b", {}, tr("Dostępna nowa wersja {v}", { v: i.najnowsza })), el("span", { class: "hint" }, tr("(masz {v})", { v: i.wersja }))];
+  if (UPD.busy) out.push(el("span", {}, "⏳ " + UPD.msg));
+  else {
+    if (i.notatki) out.push(el("button", { class: "small", onclick: () => { UPD.details = !UPD.details; renderUpdate(); } }, UPD.details ? tr("Ukryj zmiany") : tr("Pokaż zmiany")));
+    out.push(i.mozna ? el("button", { class: "primary", onclick: startUpdate }, tr("Aktualizuj"))
+                     : el("a", { href: i.url, target: "_blank", rel: "noopener" }, tr("Strona wydania")));
+    out.push(el("button", { class: "small", onclick: () => { UPD.hidden = true; renderUpdate(); } }, tr("Później")));
+    if (UPD.details && i.notatki) out.push(el("pre", { class: "notes" }, i.notatki.replace(/\*\*|`/g, "")));  // notatki są w Markdown
+  }
+  box.replaceChildren(el("div", { class: "upd" }, ...out));
+}
+// Komunikaty startowe (nowości) z „nie pokazuj więcej” – zamknięte na stałe trafiają do state.news, zamknięte
+// bez haczyka wracają przy następnym uruchomieniu. Nowy komunikat = nowy wpis w NEWS z własnym id.
+const NEWS = [{
+  id: "stl-repair-2026-10",
+  title: () => tr("Nowe narzędzie: naprawa siatek STL"),
+  text: () => tr("Bambu Studio proponuje naprawę plików VAULT przy każdym wczytaniu. napraw_stl.bat w folderze programu naprawia całą bibliotekę za jednym razem tą samą usługą Windows i zapisuje jej naprawioną kopię, którą wskazujesz potem jako bibliotekę."),
+  url: "https://github.com/rawel2/vault-stl-repair",
+}];
+const NEWS_CLOSED = new Set();  // zamknięte w tej sesji
+function renderNews() {
+  const box = $("newsBox");
+  if (WEB) {  // wersja online: co działa tutaj, a co w programie do pobrania (zamknięcie – do przeładowania strony)
+    if (NEWS_CLOSED.has("web")) { box.replaceChildren(); return; }
+    box.replaceChildren(el("div", { class: "upd" },
+      el("b", {}, tr("Wersja online – podgląd")),
+      el("span", {}, tr("Planowanie wieży, listy części i śrub, szacunek druku, kreator, przegródki i składanie działają tutaj, a projekt zapisuje się w tej przeglądarce. Kształty z plików STL, pojemniki gridfinity, etykiety z napisem, logo i płyty 3MF działają w programie do pobrania – potrzebują Twoich plików VAULT.")),
+      el("a", { href: WEB_URL, target: "_blank", rel: "noopener" }, tr("Pobierz konfigurator")),
+      el("button", { class: "small", onclick: () => { NEWS_CLOSED.add("web"); renderNews(); } }, tr("Zamknij"))));
+    return;
+  }
+  const hidden = new Set(Array.isArray(state.news) ? state.news : []);
+  const n = NEWS.find(x => !hidden.has(x.id) && !NEWS_CLOSED.has(x.id));
+  if (!n) { box.replaceChildren(); return; }
+  const chk = el("input", { type: "checkbox" });
+  box.replaceChildren(el("div", { class: "upd" },
+    el("b", {}, n.title()),
+    el("span", {}, n.text()),
+    el("a", { href: n.url, target: "_blank", rel: "noopener" }, tr("Opis i narzędzie na GitHubie")),
+    el("label", {}, chk, " ", tr("nie pokazuj więcej")),
+    el("button", { class: "small", onclick: () => {
+      if (chk.checked) { state.news = [...hidden, n.id]; save(); }
+      NEWS_CLOSED.add(n.id); renderNews();
+    } }, tr("Zamknij"))));
+}
+function updateSettings() {
+  const i = UPD.info || {};
+  const chk = el("input", { type: "checkbox", checked: i.wlaczone !== false, onchange: async e => {
+    try { UPD.info = await api("/api/aktualizacja", { wlacz: e.target.checked }); } catch (err) { alert(err.message); }
+    renderUpdate(); renderLibrary();
+  } });
+  let stan = "";
+  if (UPD.checking) stan = tr("Sprawdzam…");
+  else if (i.blad) stan = i.blad;
+  else if (i.nowa) stan = tr("Dostępna nowa wersja {v}", { v: i.najnowsza });
+  else if (i.najnowsza) stan = tr("Masz najnowszą wersję.");
+  return el("div", { class: "row", style: "margin-top:6px" },
+    el("label", { title: tr("Raz na dobę pobiera z GitHuba opis najnowszego wydania. Program nie wysyła żadnych danych.") }, chk, " ", tr("Sprawdzaj aktualizacje")),
+    el("button", { class: "small", disabled: UPD.checking, onclick: () => { UPD.hidden = false; checkUpdate(true); } }, tr("Sprawdź teraz")),
+    stan ? el("span", { class: i.blad ? "err" : "hint" }, stan) : null);
+}
+// ilość do zlecenia: z opcją „tylko niewydrukowane” bez sztuk oznaczonych jako wydrukowane
+const jobQty = e => state.job.skipDone ? e.qty - doneOf(e) : e.qty;
+function jobPayload(parts) {
+  const j = state.job;
+  return {
+    name: (j.name || "").trim() || defaultJobName(),
+    items: parts.filter(e => !e.missing && jobQty(e) > 0).map(e => {
+      const color = partColor(e.file);
+      return { file: e.file, qty: jobQty(e), label: [...e.labels].join(", "), sec: e.est ? e.est.sec : 0, g: e.est ? e.est.g : 0,
+        ...(e.gen ? { gen: e.gen } : {}),
+        ...(e.gen && typeof labTextColor === "function" ? labTextColor(e.gen) : {}),
+        ...(color ? { color, color_name: colorName(color) } : {}) };
+    }),
+    csv: csvText(),
+    opts: { copy: j.copy, make3mf: j.make3mf, printer: j.printer, bed: j.bed, gap: j.gap, clean: !!j.clean,
+      project: !!(j.project && PRINTERS[j.printer] && PRINTERS[j.printer].bambu) }
+  };
+}
+// „Wyczyść” (panel Biblioteka) i „Wyczyść folder wyników” (przy wyniku zadania): serwer usuwa z folderu wyników tylko
+// foldery wyników konfiguratora ze znacznikiem .vault-wynik (druk.jest_wynikiem); inne pliki zostają
+async function clearOutput() {
+  const dir = SERVER.settings ? SERVER.settings.wyjscie : "";
+  if (!confirm(tr("Usunąć wszystkie wyniki z folderu {dir}?", { dir }))) return;
+  try {
+    const r = await api("/api/wyczysc", {}), stare = r.stare || [];  // brak pola = serwer sprzed 1.1.35
+    alert(tr("Usunięto folderów: {n}, pominięto: {m}", { n: r.usuniete.length, m: r.pominiete.length + stare.length }) +
+      (stare.length ? "\n\n" + tr("Starsze wyniki (sprzed wersji 1.1.35) nie mają znacznika, więc zostały – usuń je ręcznie, jeśli nie są potrzebne: {list}",
+        { list: stare.slice(0, 10).join(", ") + (stare.length > 10 ? " …" : "") }) : ""));
+    pollJob();
+  }
+  catch (e) { alert(e.message); }
+}
+// Płyty z ostatniego „Przygotuj do druku” (prośba użytkownika 2026-11-05): state.plates = { t, project, map: { plik z listy
+// części: [[nr płyty, sztuk, nazwa pliku płyty, materiał]] } } – z projektem; druk.py podaje w każdej płycie „src” (pliki jak
+// na liście części, także generowane @gridfinity/…, @etykiety/…)
+const plateNo = f => (String(f).match(/_(\d{2,})(?=[_.]|$)/) || [, String(f).replace(/\.3mf$/i, "")])[1];
+function recordPlates(r) {
+  if (!Array.isArray(r.plates) || !r.plates.length || !r.plates.every(p => p.src)) return;
+  const map = {};
+  for (const p of r.plates) for (const [f, q] of Object.entries(p.src)) (map[f] = map[f] || []).push([plateNo(p.file), q, p.file, p.material || ""]);
+  histBreak();
+  state.plates = { t: new Date().toISOString(), project: r.project || "", map };
+  save();
+}
+// komórka „Płyta”: numery płyt (z liczbą sztuk, gdy część jest na kilku); stale – lista części zmieniła się od przygotowania
+function plateCell(e, d) {
+  const list = state.plates.map[e.file];
+  if (!list) return { stale: !e.missing, td: el("td", { class: "plates", title: tr("nie było tej części w ostatnim przygotowaniu wydruku") }, "–") };
+  const sum = list.reduce((a, x) => a + x[1], 0), stale = sum !== e.qty && sum !== e.qty - d;
+  // najwyżej 2 płyty w wierszu, dalej zawinięte (prośba użytkownika – szeroka kolumna nie mieściła tabeli)
+  const items = list.length === 1 && sum === e.qty ? [list[0][0]] : list.map(([n, q]) => `${n} ×${q}`);
+  const txt = items.flatMap((t, i) => i === 0 ? [t] : i % 2 ? [", " + t] : [",", el("br"), t]);
+  return { stale, td: el("td", { class: "plates" + (stale ? " stale" : ""),
+    title: list.map(([, q, f, m]) => `${f}${m ? ` (${m})` : ""}: ${q} ${tr("szt.")}`).join("\n") + (stale ? "\n" + tr("ilość na płytach różni się od listy – przygotuj wydruk ponownie") : "") }, ...txt) };
+}
+function pollJob() {
+  clearTimeout(SERVER.timer);
+  SERVER.timer = setTimeout(async () => {
+    try { SERVER.status = await api("/api/druk"); } catch (e) { SERVER.status = { error: tr("Serwer nie odpowiada:") + " " + e.message }; }
+    const st = SERVER.status || {};
+    // po skanowaniu biblioteki zmienił się katalog.js – przeładuj stronę, żeby wczytać nową listę plików
+    if (st.kind === "skan" && !st.running && st.result && SERVER.reloadAfterScan) { location.reload(); return; }
+    // koniec zadania druku uruchomionego z tej strony – płyty części do kolumny „Płyta” w „Do druku” (wynik starszego zadania
+    // albo innego projektu z serwera nie jest zapisywany)
+    if (st.kind === "druk" && !st.running && SERVER.myJob) { SERVER.myJob = false; if (st.result) recordPlates(st.result); }
+    if (state.tab === "job") renderResult();
+    renderLibrary();
+    if (st.running) pollJob();
+  }, 700);
+}
+
+// ---------- Biblioteka plików i instrukcje ----------
+function renderLibrary() {
+  const box = $("libBox"), st = SERVER.status || {}, s = SERVER.settings;
+  const out = [el("p", { class: "hint", style: "word-break:break-all" }, ...(s ? [tr("Katalog:") + " ", el("b", {}, s.biblioteka), " · "] : []),
+    tr("{n} plików STL", { n: FILES.length }))];
+  if (SERVER.ok && s) {
+    // katalog.js powstał z innego katalogu niż ustawiony (zeskanowano zapisuje skanuj.py po udanym skanie)
+    if (!samePath(s.biblioteka, s.zeskanowano))
+      out.push(el("p", { class: "err" }, tr("Ustawiony katalog ({dir}) nie był jeszcze skanowany – kliknij „Przeskanuj”.", { dir: s.biblioteka })));
+    if (!s.ok) out.push(el("p", { class: "err" }, s.message));
+    const inp = el("input", { type: "text", value: s.biblioteka, style: "width:100%", title: tr("pełna ścieżka do katalogu z plikami VAULT (STL/PDF)") });
+    const busy = !!st.running;
+    const scan = async biblioteka => {
+      try { await api("/api/ustawienia", { biblioteka }); SERVER.reloadAfterScan = true; SERVER.status = { running: true, kind: "skan", step: "start" }; renderLibrary(); pollJob(); }
+      catch (e) { alert(e.message); }
+    };
+    out.push(inp, el("div", { class: "row", style: "margin-top:6px" },
+      el("button", { disabled: busy, onclick: () => scan(inp.value) }, samePath(inp.value, s.biblioteka) ? tr("Przeskanuj") : tr("Zmień i przeskanuj")),
+      SERVER.otworz ? el("button", { class: "small", onclick: () => api("/api/otworz", { co: "biblioteka" }).catch(e => alert(e.message)) }, tr("Otwórz")) : null));
+    if (busy && st.kind === "skan") out.push(el("p", { class: "hint" }, "⏳ ", st.step || "", el("br"), tr("Nowe pliki: ok. 2–3 min na 20 GB; znane pliki są pomijane.")));
+    if (!busy && st.kind === "skan" && st.error) out.push(el("p", { class: "err" }, tr("Błąd skanowania:") + " " + st.error));
+    // folder na gotowe wydruki (/api/wyjscie – bez skanowania biblioteki)
+    const outInp = el("input", { type: "text", value: s.wyjscie, style: "width:100%", title: tr("pełna ścieżka do folderu na gotowe wydruki") });
+    const setOut = async wyjscie => {
+      try { const r = await api("/api/wyjscie", { wyjscie }); SERVER.settings = r.settings; renderLibrary(); }
+      catch (e) { alert(e.message); }
+    };
+    const pickOut = async () => {
+      try { const r = await api("/api/wybierz_katalog", { cel: "wyjscie" }); if (r.path) setOut(r.path); }
+      catch (e) { alert(e.message); }
+    };
+    out.push(el("p", { class: "hint", style: "margin:12px 0 4px" }, tr("Gotowe wydruki trafiają do:")), outInp,
+      el("div", { class: "row", style: "margin-top:6px" },
+        el("button", { class: "small", disabled: busy, onclick: () => setOut(outInp.value) }, tr("Zmień")),
+        SERVER.wybor ? el("button", { class: "small", disabled: busy, onclick: pickOut }, tr("Wybierz folder…")) : null,
+        SERVER.otworz ? el("button", { class: "small", onclick: () => api("/api/otworz", { co: "wyjscie" }).catch(e => alert(e.message)) }, tr("Otwórz")) : null,
+        // usuwa tylko foldery wyników konfiguratora ze znacznikiem (druk.jest_wynikiem) – inne pliki w folderze zostają
+        el("button", { class: "small", disabled: busy, title: tr("Usuwa wcześniejsze wyniki konfiguratora (foldery ze znacznikiem .vault-wynik); inne pliki zostają."),
+          onclick: clearOutput }, tr("Wyczyść"))));
+    if (SERVER.wersja) out.push(el("p", { class: "hint" }, tr("Wersja programu: {v}", { v: SERVER.wersja })));
+    out.push(updateSettings());
+  } else if (WEB) out.push(serverNote(""));
+  else if (SERVER.checked) {
+    out.push(el("p", { class: "hint" }, tr("Zmiana katalogu: uruchom konfigurator przez uruchom.bat lub run.sh (panel tutaj) albo w konsoli:") + " ", el("code", {}, tr('python skanuj.py "D:\\ścieżka\\vault"'))));
+  }
+  box.replaceChildren(...out);
+  renderSetup();
+}
+
+// ---------- Pierwsze uruchomienie: folder z plikami STL ----------
+// Okno pojawia się, gdy ustawiona biblioteka nie jest poprawna albo nie była jeszcze skanowana na tym komputerze
+// (np. po instalacji z instaluj.bat). Przy złym folderze odsyła na stronę producenta.
+const USSA_URL = "https://www.ussadesign.com/pages/vault";
+const SETUP = { skip: false, path: null, msg: "" };
+function renderSetup() {
+  let box = $("setupBox");
+  const s = SERVER.settings, st = SERVER.status || {}, scanning = !!st.running && st.kind === "skan";
+  const need = SERVER.ok && s && !SERVER.stale && !SETUP.skip && (!s.ok || !samePath(s.biblioteka, s.zeskanowano) || !FILES.length);
+  if (!need && !(scanning && box)) { if (box) box.remove(); return; }
+  if (!box) { box = el("div", { id: "setupBox", class: "setup-overlay", role: "dialog" }); document.body.append(box); }
+  if (SETUP.path === null) SETUP.path = s.biblioteka;
+  const check = async () => {
+    SETUP.msg = "";
+    try {
+      await api("/api/ustawienia", { biblioteka: SETUP.path });
+      SERVER.reloadAfterScan = true; SERVER.status = { running: true, kind: "skan", step: "start" }; pollJob();
+    } catch (e) { SETUP.msg = e.message; }
+    renderSetup();
+  };
+  const pick = async () => {
+    try { const r = await api("/api/wybierz_katalog", {}); if (r.path) { SETUP.path = r.path; SETUP.msg = ""; } }
+    catch (e) { SETUP.msg = e.message; }
+    renderSetup();
+  };
+  const same = samePath(SETUP.path, s.biblioteka);
+  const err = SETUP.msg || (same && !s.ok ? s.message : "");
+  const found = same && s.ok && !samePath(s.biblioteka, s.zeskanowano);
+  box.replaceChildren(el("div", { class: "setup card" },
+    el("h2", {}, tr("Pliki STL systemu VAULT")),
+    el("p", {}, tr("Konfigurator potrzebuje folderu z plikami VAULT od USSA Design (podfoldery 01. DRAWERS, 02. SUSTAINERS, 03. MODIFICATIONS). Wskaż go – program zapamięta ścieżkę i odczyta listę plików.")),
+    found ? el("p", {}, el("b", {}, tr("Znaleziono bibliotekę – kliknij „Sprawdź i skanuj” (za pierwszym razem ok. 2–3 minut)."))) : null,
+    el("div", { class: "row" },
+      el("input", { type: "text", value: SETUP.path, style: "flex:1;min-width:240px", title: tr("pełna ścieżka do katalogu z plikami VAULT (STL/PDF)"),
+        oninput: e => { SETUP.path = e.target.value; }, onkeydown: e => { if (e.key === "Enter") check(); } }),
+      SERVER.wybor ? el("button", { onclick: pick, disabled: scanning }, tr("Wybierz folder…")) : null),
+    el("div", { class: "row" },
+      el("button", { class: "primary", onclick: check, disabled: scanning }, tr("Sprawdź i skanuj")),
+      el("button", { onclick: () => { SETUP.skip = true; renderSetup(); } }, tr("Pomiń"))),
+    scanning ? el("p", { class: "hint" }, "⏳ ", st.step || "", el("br"), tr("Nowe pliki: ok. 2–3 min na 20 GB; znane pliki są pomijane.")) : null,
+    err ? el("p", { class: "err" }, err) : null,
+    !scanning && st.kind === "skan" && st.error ? el("p", { class: "err" }, tr("Błąd skanowania:") + " " + st.error) : null,
+    err || !s.ok ? el("p", { class: "setup-ussa" }, tr("Nie masz plików? Kupisz je na stronie producenta:") + " ",
+      el("a", { href: USSA_URL, target: "_blank", rel: "noopener" }, "ussadesign.com/pages/vault")) : null));
+}
+
+function renderDocs() {
+  const box = $("docsBox");
+  if (WEB) { box.replaceChildren(serverNote("")); return; }
+  if (!DOCS.length) { box.replaceChildren(el("p", { class: "hint" }, tr("Brak plików PDF/obrazów w bibliotece."))); return; }
+  const link = d => el("div", {}, el("a", { href: fileUrl(d), target: "_blank", title: d }, d.split("/").pop().replace(/\.(pdf|png|jpe?g)$/i, "")));
+  const top = DOCS.filter(d => !d.includes("/")), deeper = DOCS.filter(d => d.includes("/"));
+  box.replaceChildren(...top.map(link),
+    deeper.length ? el("details", {}, el("summary", { class: "hint" }, tr("Pozostałe ({n})", { n: deeper.length })), ...deeper.map(link)) : null);
+}
+
+// ---------- Kolory części (zgłoszenie nr 5) ----------
+// Kolor wybiera się dla grupy części (rozpoznanej po ścieżce pliku – działa też dla „Dodatkowych plików”). Części w różnych
+// kolorach trafiają na osobne płyty (projekt Bambu Studio: kolory jako filamenty, forki: projekt na kolor – druk.py).
+// Kolejność ma znaczenie: pierwsza pasująca grupa.
+// Te same grupy koloruje okno 3D (wizualizacja.js: VIZ_GROUP_ROLE) – 2026-11-05 rozdzielone tak, żeby każda paleta okna 3D,
+// także jasnoszara z instrukcji (pomarańczowe blokady, białe etykiety, czarny kręgosłup), dała się wydrukować 1:1.
+// Nakładka kluczyka – z frontami, prowadnice – z modułami, ślizgi – z pudełkami (jak na rysunkach w instrukcji).
+const COLOR_GROUPS = [
+  ["pojemniki", "pojemniki gridfinity", /^@gridfinity\//],
+  ["opony", "opony (TPU)", /tpu/],
+  ["etykiety", "etykiety", /(^|\/)label( for sustainers)?\.stl$/],
+  ["blokady", "blokady prowadnic i pręty zawiasów", /runner stopper|\/rods\//],
+  ["wklady_skrzynek", "wkłady gridfinity i przegródki skrzynek", /^02\. sustainers\/05\. universal\/(baseplates|dividers)\//],
+  // przegródki Grid Dividers (z pinami, łukami i łącznikami) – osobna grupa, bez własnego koloru jak pojemniki gridfinity
+  // (prośba użytkownika 2026-11-05: „dodajmy kolor przegródek albo weźmy taki jak pojemniki”) – partColor, okno 3D: divs
+  ["przegrodki", "przegródki szuflad Grid Dividers", /\/grid dividers\/|^@przegrodki\//],
+  ["wklady", "wkłady gridfinity szuflad", /gridfinity|baseplate/],
+  ["fronty_skrzynek", "fronty skrzynek", /^02\. sustainers\/.*facade|^@logo\/front_skrzynka/],
+  ["fronty", "fronty szuflad, zaślepki i nakładki kluczyków", /facade|key cap|^@logo\/front_szuflada/],
+  ["pudelka", "pudełka szuflad i ślizgi", /\/boxes\/|runner slide/],
+  ["uchwyty", "kręgosłup, uchwyt wysuwany, stopka, uchwyt górny i rączka Heavyweight",
+    /^03\. modifications\/(backbone|pull-out handle|feet)\/|wall mount second part|top handle|roof handle/],
+  ["moduly", "moduły (obudowy szuflad i skrzynek) i prowadnice", /module|runner guide/],
+  ["wieka", "wieka skrzynek", /^02\. sustainers\/.*roof/],
+  ["dachy", "dachy szuflad", /^01\. drawers\/.*roof/],
+  ["modyfikacje", "podstawa, koła, pegboard, uchwyt stały i ścienny", /^03\. modifications\//],
+  ["drobne", "drobne części (kluczyki, zamki, zawiasy, zatrzaski, sprężyny, listwy zębate)", /./],
+];
+// kolory filamentu Bambu PLA Basic (wartości jak w Bambu Studio); nazwa idzie do nazwy płyty
+// wszystkie jednolite kolory PLA Basic z Bambu Studio (filaments_color_codes.json, 30; do 2026-11-05 było 16), od jasnych
+// przez ciepłe do zimnych
+const COLOR_PALETTE = [
+  ["#FFFFFF", "biały"], ["#D1D3D5", "jasnoszary"], ["#A6A9AA", "srebrny"], ["#8E9089", "szary"], ["#545454", "ciemnoszary"],
+  ["#000000", "czarny"], ["#F7E6DE", "beżowy"], ["#E4BD68", "złoty"], ["#847D48", "spiżowy"], ["#6F5034", "kakaowy"],
+  ["#9D432C", "brązowy"], ["#9D2235", "bordowy"], ["#C12E1F", "czerwony"], ["#F55A74", "różowy"], ["#F5547C", "jaskraworóżowy"],
+  ["#EC008C", "purpurowy"], ["#FF6A13", "pomarańczowy"], ["#FF9016", "dyniowy"], ["#FEC600", "słonecznikowy"], ["#F4EE2A", "żółty"],
+  ["#BECF00", "jasnozielony"], ["#00AE42", "zielony"], ["#3F8E43", "jemiołowy"], ["#00B1B7", "turkusowy"], ["#0086D6", "błękitny"],
+  ["#0056B8", "kobaltowy"], ["#0A2989", "niebieski"], ["#5B6579", "niebieskoszary"], ["#5E43B7", "fioletowy"], ["#482960", "indygo"],
+];
+const colorGroup = file => file.startsWith("@etykiety/") ? "etykiety" : (COLOR_GROUPS.find(([, , rx]) => rx.test(norm(file))) || COLOR_GROUPS[COLOR_GROUPS.length - 1])[0];
+const colorName = hex => { const p = COLOR_PALETTE.find(([h]) => h.toLowerCase() === (hex || "").toLowerCase()); return p ? tr(p[1]) : (hex || "").replace("#", ""); };
+const partColor = file => { const c = state.colors || {}, g = colorGroup(file); return c[g] || (g === "przegrodki" && c.pojemniki) || ""; };
+// „Wklej kolory z widoku 3D” (prośba użytkownika 2026-11-05): okno 3D koloruje części tymi samymi grupami (vizGroupColors),
+// więc każda grupa dostaje dokładnie kolor z okna. Każdy kolor zamieniony na najbliższy filament z COLOR_PALETTE (palety
+// okna 3D są z nich złożone), daleki – zostaje własny.
+function pasteVizColors() {
+  const V = Object.assign({}, VIZ_PALETTES.ussa, state.viz || {});
+  if (V.palette === "druk") { toast(tr("Okno 3D pokazuje już kolory części z wydruku"), false); return; }
+  const rgb = h => [1, 3, 5].map(i => parseInt(String(h).slice(i, i + 2), 16) || 0), dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
+  const snap = h => {
+    if (!/^#[0-9a-f]{6}$/i.test(String(h))) return null;
+    const best = COLOR_PALETTE.map(([p]) => [p, dist(rgb(p), rgb(h))]).sort((a, b) => a[1] - b[1])[0];
+    return best[1] < 60 ? best[0] : String(h).toUpperCase();
+  };
+  histBreak();
+  state.colors = Object.fromEntries(Object.entries(vizGroupColors(V)).map(([k, v]) => [k, snap(v)]).filter(([, v]) => v));
+  save(); renderResult();
+  toast(tr("Wklejono kolory z widoku 3D"));
+}
+function renderColors(parts) {
+  state.colors = state.colors || {};
+  const used = new Set(parts.filter(e => !e.missing).map(e => colorGroup(e.file)));
+  const rows = COLOR_GROUPS.filter(([k]) => used.has(k)).map(([k, label]) => {
+    const cur = state.colors[k] || "";
+    const set = v => { if (v) state.colors[k] = v; else delete state.colors[k]; save(); renderResult(); };
+    // przegródki bez własnego koloru – jak pojemniki gridfinity (partColor)
+    const jak = k === "przegrodki" && state.colors.pojemniki;
+    const opts = [["", k === "przegrodki" ? tr("jak pojemniki gridfinity") : tr("bez koloru (jak inne)")], ...COLOR_PALETTE.map(([h, n]) => [h, tr(n)])];
+    if (cur && !COLOR_PALETTE.some(([h]) => h.toLowerCase() === cur.toLowerCase())) opts.push([cur, tr("własny {hex}", { hex: cur })]);
+    return el("div", { class: "row" },
+      el("span", { style: `display:inline-block;width:14px;height:14px;border:1px solid var(--line);border-radius:3px;background:${cur || jak || "transparent"}` }),
+      el("span", { style: "flex:1;min-width:180px" }, tr(label)),
+      sel(cur, opts, set),
+      el("input", { type: "color", value: cur || "#c8c8c8", title: tr("własny kolor"), onchange: e => set(e.target.value.toUpperCase()) }));
+  });
+  if (!rows.length) return null;
+  return el("details", { open: Object.keys(state.colors).length > 0 },
+    el("summary", {}, tr("Kolory części") + (Object.keys(state.colors).length ? ` (${Object.keys(state.colors).length})` : "")),
+    el("div", { class: "row" }, el("button", { class: "small", title: tr("Kolory z palety okna Wizualizacja 3D – każdy zamieniony na najbliższy filament PLA Basic z listy"),
+      onclick: pasteVizColors }, tr("Wklej kolory z widoku 3D"))),
+    el("p", { class: "hint" }, tr("Części w różnych kolorach trafiają na osobne płyty, a kolor jest w nazwie płyty. Projekt Bambu Studio ma je jako kolejne filamenty, w innych slicerach każdy kolor to osobny projekt. Bez wybranych kolorów wszystko jak dotąd.")),
+    ...rows);
+}
+
+function renderJob(box, parts) {
+  const j = state.job, setj = k => v => { j[k] = v; save(); renderResult(); };
+  const ok = parts.filter(e => !e.missing && jobQty(e) > 0), pieces = ok.reduce((n, e) => n + jobQty(e), 0);
+  const dn = parts.filter(e => !e.missing).reduce((n, e) => n + doneOf(e), 0);
+  if (!PRINTERS[j.printer] && j.printer !== "custom") j.printer = PRINTERS[j.printer.split("_")[0]] ? j.printer.split("_")[0] : "h2s";
+  const pr = PRINTERS[j.printer];
+  // projekt Bambu Studio (druk.py: zapisz_projekt) – tylko drukarki z profilem "bambu"; nie jest centrowany przy otwarciu
+  const proj = !!(pr && pr.bambu && j.make3mf && j.project), A = pr && (proj && pr.bambu.area ? pr.bambu.area : symArea(pr));
+  const form = el("div", {},
+    el("div", { class: "row" }, tr("Nazwa folderu:") + " ",
+      el("input", { type: "text", value: j.name || "", placeholder: defaultJobName(), style: "flex:1;min-width:200px",
+        onchange: e => { j.name = e.target.value; save(); renderResult(); } }),
+      j.name ? el("button", { class: "small", title: tr("przywróć nazwę z zestawów"), onclick: () => { j.name = ""; save(); renderResult(); } }, "✕") : null),
+    el("div", { class: "row" }, tr("Drukarka:") + " ",
+      sel(j.printer, [...Object.entries(PRINTERS).map(([k, v]) => [k, printerLabel(v)]), ["custom", tr("własny stół…")]], setj("printer")),
+      j.printer === "custom" ? el("span", {}, tr("stół") + " ", ...[0, 1, 2].flatMap(i => [num(j.bed[i], v => { j.bed[i] = v; save(); renderResult(); }, 50), i < 2 ? " × " : " mm"])) : null),
+    pr ? el("p", { class: "hint" }, tr("Części trafią w obszar X {x0}–{x1}, Y {y0}–{y1} mm (stół {bw}×{bd}), wysokość do {h} mm", { x0: A[0], x1: A[2], y0: A[1], y1: A[3], bw: pr.bed[0], bd: pr.bed[1], h: pr.h }) +
+      ([...pr.exclude, ...pr.wrap].length ? tr(", z pominięciem stref {zones}", { zones: [...pr.exclude, ...pr.wrap].map(e => `X ${e[0]}–${e[2]} / Y ${e[1]}–${e[3]}`).join(", ") }) : "") +
+      (proj ? tr(". Wszystkie płyty trafią do jednego projektu {slicer} z profilami systemowymi: {printer}, {process}, {filament} (części z TPU – osobny projekt).",
+        { slicer: pr.bambu.slicer || "Bambu Studio", printer: pr.bambu.printer, process: pr.bambu.process, filament: pr.bambu.pla })
+        : tr(". Układ płyty jest wyśrodkowany na stole, bo tak ustawia go Bambu Studio przy imporcie."))) : null,
+    pr && pr.note && !proj ? el("p", { class: "hint" }, "ℹ " + tr(pr.note)) : null,
+    pr && pr.nozzle ? el("p", { class: "err" }, tr(pr.nozzle === "left"
+      ? "Wariant jednej dyszy: część elementów trafi w pas, do którego sięga tylko lewa dysza. Po otwarciu 3MF przypisz filament do lewej dyszy, inaczej pojawi się błąd „Pozycja lub rozmiar…”."
+      : "Wariant jednej dyszy: część elementów trafi w pas, do którego sięga tylko prawa dysza. Po otwarciu 3MF przypisz filament do prawej dyszy, inaczej pojawi się błąd „Pozycja lub rozmiar…”.")) : null,
+    // puste etykiety wyłączone, a etykiet z napisem nie tyle, ile frontów – widoczne tuż przed wydrukiem
+    typeof labMismatch === "function" && labMismatch() ? el("p", { class: "err" }, "⚠ " + labMismatch() + " ",
+      el("button", { class: "small", onclick: () => { state.tab = "labels"; update(); } }, tr("Etykiety"))) : null,
+    el("div", { class: "row" }, tr("Odstęp między częściami:") + " ", num(j.gap, setj("gap"), 0), " mm"),
+    el("div", { class: "row" }, chk(j.copy, tr("skopiuj pliki STL do folderu do_druku"), setj("copy")),
+      chk(j.make3mf, tr("utwórz płyty 3MF z rozmieszczonymi częściami"), setj("make3mf"))),
+    el("div", { class: "row" }, chk(!!j.clean, tr("najpierw wyczyść folder wyników (usuwa wcześniejsze wyniki)"), setj("clean"))),
+    dn || j.skipDone ? el("div", { class: "row" }, chk(!!j.skipDone, tr("tylko niewydrukowane (pomiń {n} szt. oznaczonych na liście „Do druku”)", { n: dn }), setj("skipDone"))) : null,
+    pr && pr.bambu && j.make3mf ? el("div", { class: "row" },
+      chk(j.project, tr("jeden projekt {slicer} ze wszystkimi płytami (zamiast osobnych plików 3MF)", { slicer: pr.bambu.slicer || "Bambu Studio" }), setj("project"))) : null,
+    // projekt ma nazwy profili tego slicera – inny (np. OrcaSlicer) ich nie zna i składa „własną” drukarkę (zgłoszenie nr 6)
+    proj ? el("p", { class: "hint" }, tr("Projekt jest dla {slicer}. W innym slicerze (np. OrcaSlicer) wybierz po otwarciu swoją drukarkę z listy albo użyj osobnych plików 3MF.", { slicer: pr.bambu.slicer || "Bambu Studio" })) : null);
+  const all = SERVER.status || {}, st = all.kind === "skan" ? {} : all;  // wynik skanowania pokazuje panel biblioteki
+  const busy = !!all.running;
+  const go = el("button", { class: "primary", disabled: !ok.length || busy || !(j.copy || j.make3mf) || !SERVER.ok || SERVER.stale, onclick: async () => {
+    try { await api("/api/druk", jobPayload(parts)); SERVER.myJob = true; SERVER.status = { running: true, step: "start" }; renderResult(); pollJob(); }
+    catch (e) { alert(e.message); }
+  } }, busy ? tr("Trwa przygotowanie…") : tr("Przygotuj do druku ({n} szt.)", { n: pieces }));
+  const out = [el("h3", {}, tr("Przygotowanie wydruku")), form, renderColors(parts), el("div", { class: "row" }, go)].filter(Boolean);
+  if (SERVER.stale) out.push(el("p", { class: "err" },
+    tr("Serwer działa na starszej wersji programu (inne obszary drukarek). Zamknij okno konsoli serwera, uruchom ponownie konfigurator (uruchom.bat lub run.sh) i odśwież tę stronę.")));
+  if (!SERVER.checked) out.push(el("p", { class: "hint" }, tr("Sprawdzam serwer…")));
+  else if (WEB) out.push(serverNote(""));
+  else if (!SERVER.ok) out.push(el("div", { class: "hint" },
+    el("p", { class: "err" }, tr("Konfigurator nie jest uruchomiony przez serwer, więc przeglądarka nie ma dostępu do plików.")),
+    el("p", {}, tr("Zamknij tę kartę i uruchom uruchom.bat (Windows) albo run.sh (macOS, Linux) w folderze konfigurator (otworzy konfigurator z obsługą plików). Projekt zapisuje się w przeglądarce osobno dla każdego adresu – przenieś go przyciskami Zapisz/Wczytaj projekt.")),
+    el("p", {}, tr("Możesz też pobrać zlecenie i uruchomić je ręcznie:") + " ", el("code", {}, "python druk.py " + tr("vault-zlecenie.json"))),
+    el("button", { onclick: () => download(new Blob([JSON.stringify(jobPayload(parts), null, 1)], { type: "application/json" }), tr("vault-zlecenie.json")) }, tr("Pobierz zlecenie (JSON)"))));
+  if (busy) {
+    // pasek postępu: serwer podaje ułamek 0–1 (kopiowanie STL, potem płyty 3MF po siatkach); bez liczby – pasek nieokreślony
+    const p = typeof st.progress === "number" ? Math.max(0, Math.min(1, st.progress)) : null;
+    out.push(el("p", {}, "⏳ ", st.step || "", p !== null ? ` · ${Math.round(p * 100)} %` : ""),
+      p !== null ? el("progress", { class: "job", max: 1, value: p }) : el("progress", { class: "job" }),
+      el("p", { class: "hint" }, tr("Duże moduły (XL) mają do 340 MB – ich zapis do 3MF trwa do kilkudziesięciu sekund.")));
+  }
+  if (st.error) out.push(el("p", { class: "err" }, tr("Błąd:") + " " + st.error));
+  if (!busy && st.result) {
+    const r = st.result;
+    out.push(el("h3", {}, tr("Gotowe")),
+      el("p", {}, tr("Folder: {dir}", { dir: r.folder }), el("br"), tr("Skopiowano plików: {copied} · płyt 3MF: {plates} · czas: {sec} s", { copied: r.copied, plates: r.plates.length, sec: r.seconds })),
+      r.project ? el("p", {}, tr("Projekt {slicer}: {file}", { slicer: r.slicer || "Bambu Studio", file: r.project.split(", ").map(f => "3mf/" + f).join(", ") })) : null,
+      r.cleaned ? el("p", { class: "hint" }, tr("Usunięto wcześniejsze wyniki: {n}", { n: r.cleaned })) : null,
+      el("div", { class: "row" }, SERVER.otworz ? el("button", { onclick: () => api("/api/otworz", {}).catch(e => alert(e.message)) }, tr("Otwórz folder")) : null,
+        // serwer na innym komputerze (NAS, kontener Dockera): folderu nie otworzysz, ale pobierzesz go jako ZIP
+        el("button", { title: tr("Cały folder wyniku jako archiwum ZIP – przydatne, gdy serwer działa na innym komputerze (NAS, Docker)."),
+          onclick: () => { location.href = "/api/pobierz"; } }, tr("Pobierz ZIP")),
+        el("button", { title: tr("Usuwa wcześniejsze wyniki konfiguratora (foldery ze znacznikiem .vault-wynik); inne pliki zostają."), onclick: clearOutput },
+          tr("Wyczyść folder wyników"))));
+    if (r.lang && r.lang !== LANG) out.push(el("p", { class: "hint" }, tr("Komunikaty poniżej pochodzą z zadania wykonanego w innym języku.")));
+    for (const w of r.warnings) out.push(el("p", { class: "err", lang: r.lang || LANG }, "⚠ " + w));
+    if (r.plates.length) {
+      const tb = el("tbody");
+      for (const p of r.plates) tb.append(el("tr", { class: p.too_big ? "missing" : "" },
+        el("td", {}, p.file, el("div", { class: "path" }, p.material)),
+        el("td", { class: "used" }, Object.entries(p.items).map(([n, q]) => `${q}× ${n.replace(/\.stl$/i, "")}`).join(", ")),
+        el("td", { class: "q" }, fmtTime(p.sec), el("div", { class: "path" }, fmtG(p.g)))));
+      out.push(el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, tr("Płyta")), el("th", {}, tr("Zawartość")), el("th", { class: "q" }, tr("Czas · filament")))), tb),
+        el("p", { class: "hint" }, r.project
+          ? tr("Otwórz projekt w {slicer} (Plik → Otwórz projekt) – płyty, drukarka, proces i filament są już ustawione. Włącz podpory dla części „Turn On Supports”. Części są w orientacji z plików STL.", { slicer: r.slicer || "Bambu Studio" })
+          : tr("Otwórz plik 3MF w Bambu Studio / OrcaSlicer / PrusaSlicer, wybierz profil i filament, włącz podpory dla części „Turn On Supports”. Części są w orientacji z plików STL.")));
+    }
+  }
+  box.replaceChildren(...out.filter(Boolean));  // null (np. brak projektu slicera) wyświetlałby się jako tekst „null”
+}
+function download(blob, name) {
+  const a = el("a", { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+}
+
+// ---------- Zdarzenia ----------
+$("btnAddStack").onclick = () => { state.stacks.push(newStack(state.stacks.length + 1)); state.current = state.stacks.length - 1; update(); };
+$("btnDupStack").onclick = () => {
+  const o = cur(), c = JSON.parse(JSON.stringify(o)); c.id = uid++; c.name += " " + tr("(kopia)"); c.layers.forEach(l => l.id = uid++);
+  if (typeof binCopyLayouts === "function") c.layers.forEach((l, j) => binCopyLayouts(`i:${o.id}:${o.layers[j].id}:`, `i:${c.id}:${l.id}:`));
+  if (typeof gdCopyLayouts === "function") c.layers.forEach((l, j) => gdCopyLayouts(`i:${o.id}:${o.layers[j].id}:`, `i:${c.id}:${l.id}:`));
+  state.stacks.splice(state.current + 1, 0, c); state.current++; update();
+};
+// usunięcie zestawu bez pytania – komunikat z „Cofnij” (i Ctrl+Z) zamiast okna potwierdzenia
+$("btnWizard").onclick = () => openWizard();
+$("btnDelStack").onclick = () => {
+  if (state.stacks.length === 1) return;
+  const name = cur().name;
+  histBreak(); state.stacks.splice(state.current, 1); state.current = Math.max(0, state.current - 1); update();
+  toast(tr("Usunięto „{name}”", { name }));
+};
+$("optLang").onchange = e => {
+  state.lang = e.target.value;
+  // domyślne nazwy zestawów („Zestaw 3” / „Set 3”) idą za językiem; nazwy nadane przez użytkownika zostają
+  const domyslne = Object.values(I18N).map(d => d["Zestaw {n}"]).concat("Zestaw {n}")
+    .map(w => new RegExp("^" + w.replace("{n}", "(\\d+)") + "$"));
+  LANG = resolveLang(state.lang);
+  for (const st of state.stacks) {
+    const m = domyslne.map(r => st.name.match(r)).find(Boolean);
+    if (m) st.name = tr("Zestaw {n}", { n: m[1] });
+  }
+  update();
+  if (SERVER.ok) checkServer();  // komunikaty serwera (np. o bibliotece) w nowym języku
+};
+$("optTheme").onchange = e => { state.theme = e.target.value; update(); };
+// motyw: „auto” = ustawienie systemu (prefers-color-scheme), inaczej wybór użytkownika; zapisywany z projektem
+const darkMedia = matchMedia("(prefers-color-scheme: dark)");
+const applyTheme = () => {
+  const t = state.theme === "light" || state.theme === "dark" ? state.theme : darkMedia.matches ? "dark" : "light";
+  if (document.documentElement.dataset.theme !== t) document.documentElement.dataset.theme = t;
+};
+darkMedia.addEventListener("change", applyTheme);
+$("optKey").onchange = e => { state.key = e.target.value; update(); };
+$("optKeyPrint").onchange = e => { state.keyPrint = e.target.checked; update(); };
+$("optRails").onchange = e => { state.rails = e.target.value; update(); };
+$("optLabels").onchange = e => { state.blankLabels = e.target.checked; update(); };
+$("optSpeed").onchange = e => { state.speed = Math.min(5, Math.max(0.2, parseFloat(e.target.value) || 1)); update(); };
+$("optPrice").onchange = e => { state.price = Math.max(0, parseFloat(e.target.value) || 0); update(); };
+document.querySelectorAll(".tabs button[data-tab]").forEach(btn => btn.onclick = () => { state.tab = btn.dataset.tab; update(); });
+$("btnCsv").onclick = exportCsv;
+// panel „Ustawienia” (z prawej) i menu „Projekt”; Esc i kliknięcie obok zamykają
+// panele z prawej (Ustawienia, Pomoc) – jeden naraz, wspólne przyciemnienie tła
+const openPanel = (id, on) => {
+  for (const p of ["settings", "helpPanel"]) $(p).hidden = !(on && p === id);
+  $("setOverlay").hidden = !on;
+  if (on) $(id).querySelector(".drawer-head button").focus();
+};
+const openSettings = on => openPanel("settings", on);
+$("btnSettings").onclick = () => { $("projMenu").open = false; openSettings(true); };
+$("btnHelp").onclick = () => { $("projMenu").open = false; openPanel("helpPanel", true); };
+$("btnSetClose").onclick = $("btnHelpClose").onclick = $("setOverlay").onclick = () => openPanel(null, false);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("setOverlay").hidden) openPanel(null, false); });
+// przyciski „przejdź” w krokach pomocy
+document.querySelectorAll("#helpPanel [data-go]").forEach(b => b.onclick = () => {
+  const go = b.dataset.go;
+  openPanel(null, false);
+  if (go === "settings") openSettings(true);
+  else if (go === "wizard") openWizard();
+  else { state.tab = go; update(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+});
+document.addEventListener("click", e => { if ($("projMenu").open && !$("projMenu").contains(e.target)) $("projMenu").open = false; });
+$("btnSide").onclick = () => { state.sideOff = !state.sideOff; update(); };
+$("btnUndo").onclick = () => undo();
+$("btnRedo").onclick = () => redo();
+// Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z, na Macu Cmd) – poza polami tekstowymi, gdzie działa cofanie przeglądarki; nie w oknie 3D
+document.addEventListener("keydown", e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = e.key.toLowerCase(), t = e.target, tag = (t && t.tagName) || "";
+  if (k !== "z" && k !== "y") return;
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(tag) || (t && t.isContentEditable) || document.querySelector(".viz-overlay")) return;
+  e.preventDefault();
+  if (k === "y" || e.shiftKey) redo(); else undo();
+});
+// Zapis projektu: w Chrome/Edge okno zapisu (można nadpisać ten sam plik); gdzie go nie ma (Safari, Firefox, adres
+// spoza localhost – np. NAS) zwykłe pobieranie z datą w nazwie – przeglądarka nie nadpisuje pliku, tylko dopisuje „(1)”,
+// i łatwo było potem wczytać stary projekt (zgłoszenie nr 9)
+$("btnSave").onclick = async () => {
+  $("projMenu").open = false;
+  const blob = new Blob([JSON.stringify(state, null, 1)], { type: "application/json" }), name = tr("vault-projekt.json");
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await showSaveFilePicker({ suggestedName: name,
+        types: [{ description: tr("Projekt konfiguratora VAULT"), accept: { "application/json": [".json"] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+      return;
+    } catch (e) { if (e.name === "AbortError") return; }  // inny błąd (np. brak uprawnień) – zwykłe pobieranie
+  }
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  download(blob, name.replace(/\.json$/, `_${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.json`));
+};
+$("btnLoad").onclick = () => { $("projMenu").open = false; $("fileLoad").click(); };
+// nowy, pusty projekt (jak przy pierwszym uruchomieniu); zostają ustawienia komputera i drukarka – poprzedni projekt wraca
+// przez Cofnij (komunikat i Ctrl+Z), więc bez okna potwierdzenia
+$("btnNew").onclick = () => {
+  $("projMenu").open = false;
+  const keep = Object.fromEntries(PREFS.filter(k => k in state).map(k => [k, state[k]]));
+  histBreak();
+  state = Object.assign(defaultState(), keep, { job: { ...state.job, name: "" } });
+  if (typeof BIN !== "undefined") BIN.sel = -1;
+  fixIds(); update();
+  toast(tr("Nowy projekt – poprzedni przywróci „Cofnij”"));
+};
+$("fileLoad").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const s = JSON.parse(await f.text());
+    if (!Array.isArray(s.stacks) || !s.stacks.length) throw new Error();
+    // projekt z pliku zastępuje poprzedni w całości: wcześniej Object.assign(state, s) zostawiał pola, których w pliku
+    // nie było (kolory części, dodatkowe pliki, nazwa folderu wyniku…) – zgłoszenie nr 9. Zostają tylko ustawienia
+    // tego komputera (PREFS) i drukarka z opcjami wydruku, jeśli plik ich nie ma.
+    const keep = Object.fromEntries(PREFS.filter(k => k in state).map(k => [k, state[k]]));
+    state = Object.assign(defaultState(), keep, { job: { ...state.job, name: "" } }, s, { current: 0 }); fixIds(); update();
+  } catch { alert(tr("To nie jest plik projektu konfiguratora.")); }
+  e.target.value = "";
+};
+
+function render() {
+  LANG = resolveLang(state.lang);
+  // po zmianie języka komunikaty serwera trzeba pobrać od nowa – inaczej zostają w poprzednim języku
+  if (SERVER.checked && SERVER.lang && SERVER.lang !== LANG) checkServer();
+  applyStaticTr();
+  $("optLang").value = state.lang || "auto";
+  $("optTheme").value = state.theme || "auto"; applyTheme();
+  $("optKey").value = state.key; $("optRails").value = state.rails; $("optLabels").checked = state.blankLabels !== false;
+  $("optKeyPrint").checked = state.keyPrint !== false;  // brak pola (starsze projekty) = drukuj
+  $("optKeyPrintRow").style.display = state.key === "hidden" ? "" : "none";  // .field ma display: flex – atrybut hidden nie działa
+  $("optSpeed").value = state.speed; $("optPrice").value = state.price;
+  document.querySelector("main").classList.toggle("side-off", !!state.sideOff);
+  $("btnSide").textContent = state.sideOff ? "»" : "«";
+  $("btnSide").title = tr(state.sideOff ? "Rozwiń panel" : "Zwiń panel");
+  renderStacks(); renderEditor(); renderExtras(); renderResult(); renderLibrary(); renderDocs(); renderUpdate(); renderNews();
+}
+
+load();
+update();
+if (!FILES.length) document.body.prepend(el("p", { class: "err", style: "padding:12px" },
+  tr("Brak listy plików – ustaw katalog biblioteki w Ustawieniach → „Biblioteka plików” (uruchom.bat lub run.sh) albo uruchom: python skanuj.py \"D:\\ścieżka\\vault\"")));
+checkServer().then(() => renderResult());  // także lista części: szacunek pojemników gridfinity liczy serwer
+</script>
+</body>
+</html>
