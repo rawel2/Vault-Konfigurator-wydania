@@ -27,7 +27,7 @@ const GD_DIR = "^01\\. drawers/07\\. universal/grid dividers/";
 const gdRx = (hgt, n) => new RegExp(GD_DIR + GD_FOLDER[hgt][0] + "/" + n + "(-(s|m|l|xl))?(, x\\d)?\\.stl$");
 const gdEdgeRx = (hgt, kind) => new RegExp(GD_DIR + GD_FOLDER[hgt][0] + "/" + kind + " edge piece " + GD_FOLDER[hgt][1] + "\\.stl$");
 const gdPinRx = pin => new RegExp(GD_DIR + "grid divider pin_" + (pin === "loose" ? "loose" : "tight") + "\\.stl$");
-const GD = { drag: null, sel: -1, selA: -1, box: null, mode: "line", rad: 3 };
+const GD = { drag: null, sel: -1, selA: -1, selP: -1, box: null, mode: "line", rad: 3, postD: 12, postH: 0 };
 
 // ---------- łuki (własny projekt – luki.py, wersja generatora 26; prośba użytkownika 2026-11-05: „zakręty” z reklamy) ----------
 // Łuk { u, v – środek w otworze, r – promień w odstępach (2–12), kat 90|180, a0 – kąt początku 0/90/180/270 (przeciwnie do
@@ -89,7 +89,7 @@ const gdPinGen = () => {
   const luz = GD_PIN_LUZ.includes(+state.gdPinLuz) ? +state.gdPinLuz : 0.2;
   return { typ: "pin", luz, dol: state.gdPinDol === "l" ? "l" : "t" };
 };
-const gdPinFile = q => { const f = "@przegrodki/pin_przegrodki_luz" + q.luz.toFixed(1) + "_" + (q.dol === "l" ? "loose" : "tight") + ".stl"; if (typeof BIN_GEN !== "undefined") BIN_GEN.set(f, q); return f; };
+const gdPinFile = q => { const f = "@przegrodki/pin_" + (q.krotki ? "slupka" : "przegrodki") + "_luz" + q.luz.toFixed(1) + "_" + (q.dol === "l" ? "loose" : "tight") + ".stl"; if (typeof BIN_GEN !== "undefined") BIN_GEN.set(f, q); return f; };
 const gdShortFile = q => { const f = "@przegrodki/przegrodka_krotka_" + q.n + "_" + q.h + "mm_" + q.k0 + "_" + q.k1 + ".stl"; if (typeof BIN_GEN !== "undefined") BIN_GEN.set(f, q); return f; };
 
 // ---------- krzyżaki „+” (luki.py typ "krzyz", 2026-11-05 – prośba użytkownika: przecinające się proste; stopy dwóch „T”
@@ -170,6 +170,57 @@ function gdArcExt(res, ai) {
 const gdExtPins = (x, m = 0) => { if (!x) return m ? Array.from({ length: m }, (_, i) => i + 1) : []; const n = +x[0] + m, k = x.slice(1), out = []; for (let j = 1; j <= n; j++) if (!(k === "s" && 5.25 + (n - j) * GD_PITCH < 13)) out.push(j); return out; };
 // ramię łącznika w odstępach (luki.RAMIE = 15,75 mm): koniec dochodzącej przegródki i pin w otworze na ramieniu
 const GD_ARM = 1.5;
+
+// ---------- słupki w dnie szuflady (luki.py typ "slupek", 2026-11-06 – prośba użytkownika ze zdjęciem reklamy USSA; w plikach
+// USSA ich nie ma; „co najmniej 4 piny albo 5”, „dwie, może trzy średnice i wysokości dopasowane do F”) ----------
+// s.posts [{ u, v, p: 4|5, d, h }]: 4 piny – (u, v) to lewy przedni z 4 otworów, słupek na środku kratki; 5 pinów – (u, v) to
+// otwór pod słupkiem, piny też w 4 sąsiednich („+”). Podstawa 20 / 30 mm, 12 mm wysokości (gniazda jak w przegródkach),
+// trzon Ø 8 / 12 / 16 z kopułką, wysokość 20 mm albo pełna 1F / 2F / 4F (34,5 / 82,5 / 178,5 – nie wyższy niż szuflada).
+// Po podglądzie i szkicach (2026-11-06): najniższy 34,5 mm, szyjka Ø 5 przez 10 mm od czubka i łuk styczny do podstawy (d – stopa
+// łuku), 1 pin – okrągła podstawa 3 mm (promień d/2 + 2, zwykły pin), 4 i 5 pinów – podstawa 7 mm i krótkie piny (`krotki`).
+const GD_POST_VER = 28, GD_POST_D = [8, 12, 16];
+const gdPostOk = () => typeof SERVER !== "undefined" && !!SERVER.pojemniki && (SERVER.pojemnikiWer || 1) >= GD_POST_VER;
+const gdPostP = P => [1, 4, 5].includes(P.p) ? P.p : 4;
+const gdPostHalf = P => gdPostP(P) === 5 ? 15 : gdPostP(P) === 1 ? (GD_POST_D.includes(P.d) ? P.d : 12) / 2 + 2 : 10;  // pół podstawy [mm]
+const gdPostHeights = h => h >= 4 ? [34.5, 82.5, 178.5] : h >= 2 ? [34.5, 82.5] : [34.5];
+const gdPostC = P => gdPostP(P) === 4 ? [P.u + 0.5, P.v + 0.5] : [P.u, P.v];
+const gdPostPins = P => gdPostP(P) === 5 ? [[P.u, P.v], [P.u + 1, P.v], [P.u - 1, P.v], [P.u, P.v + 1], [P.u, P.v - 1]]
+  : gdPostP(P) === 1 ? [[P.u, P.v]] : [[P.u, P.v], [P.u + 1, P.v], [P.u, P.v + 1], [P.u + 1, P.v + 1]];
+const gdPostGen = (P, fh) => {
+  const hs = gdPostHeights(fh);
+  return { typ: "slupek", piny: gdPostP(P), d: GD_POST_D.includes(P.d) ? P.d : 12, h: hs.includes(P.h) ? P.h : hs[hs.length - 1] };
+};
+const gdPostMode = m => m === "p1" || m === "p4" || m === "p5";
+const gdPostLabel = (p, v) => p === 5 ? tr("słupek z 5 pinami, Ø {d} mm, {h} mm", v) : p === 1 ? tr("słupek z 1 pinem, Ø {d} mm, {h} mm", v) : tr("słupek z 4 pinami, Ø {d} mm, {h} mm", v);
+const gdPostFile = q => { const f = "@przegrodki/slupek_" + q.piny + "p_d" + q.d + "_" + q.h + "mm.stl"; if (typeof BIN_GEN !== "undefined") BIN_GEN.set(f, q); return f; };
+// błąd słupka k: piny poza siatką, podstawa na ściance, na innym słupku, na stopie przegródki (25,4 mm), łączniku albo łuku
+function gdPostErr(g, s, res, k) {
+  const P = s.posts[k], [cu, cv] = gdPostC(P), B = gdPostHalf(P) / GD_PITCH, F = 12.68 / GD_PITCH, m = 0.3 / GD_PITCH;
+  if (gdPostPins(P).some(([u, v]) => u < 0 || v < 0 || u >= g.C || v >= g.R)) return tr("piny słupka poza siatką otworów");
+  if (cu - B - m < g.wall.h[0] || cu + B + m > g.wall.h[1] || cv - B - m < g.wall.v[0] || cv + B + m > g.wall.v[1]) return tr("podstawa słupka wchodzi na ściankę");
+  for (const [j, Q] of s.posts.entries()) {
+    if (j >= k) break;  // nachodzące – błąd ma później dodany (wcześniejszy zostaje na liście części, jak przy przegródkach)
+    const [qu, qv] = gdPostC(Q), Bq = gdPostHalf(Q) / GD_PITCH;
+    if (Math.abs(cu - qu) < B + Bq - 1e-6 && Math.abs(cv - qv) < B + Bq - 1e-6) return tr("nachodzi na inny słupek");
+  }
+  for (const [li, L] of s.lines.entries()) {
+    const r = res[li], w = g.wall[L.o];
+    const lo = r.ends[0] === "wall" ? w[0] : r.start, hi = r.ends[1] === "wall" ? w[1] : r.end;
+    const [along, across] = L.o === "h" ? [cu, cv] : [cv, cu];
+    if (Math.abs(across - L.a) < F + B && along + B > lo && along - B < hi) return tr("stoi na przegródce – stopa przegródki ma 25,4 mm");
+  }
+  const near = (u, v, r) => Math.abs(u - cu) < r + B && Math.abs(v - cv) < r + B;
+  for (const C of s.cross || []) if (near(C[0], C[1], GD_ARM + F)) return tr("stoi na łączniku przegródek");
+  for (const A of s.arcs || []) {
+    for (let a = A.a0; a <= A.a0 + A.kat + 1e-9; a += 3) {
+      const t = a * Math.PI / 180;
+      if (near(A.u + A.r * Math.cos(t), A.v + A.r * Math.sin(t), F)) return tr("stoi na łuku przegródki");
+    }
+    for (const { E, d } of gdArcEnds(A)) for (let t = 0; t <= GD_TONGUE / GD_PITCH; t += 0.25)
+      if (near(E[0] + d[0] * t, E[1] + d[1] * t, F)) return tr("stoi na łuku przegródki");
+  }
+  return "";
+}
 // stopa łuku w pudełku (≥ 12,7 mm od ścianek), język na końcach nie za ścianką
 function gdArcErr(g, A) {
   const fu = GD_FOOT / GD_PITCH, ins = (u, v, m) => u - g.wall.h[0] >= m && g.wall.h[1] - u >= m && v - g.wall.v[0] >= m && g.wall.v[1] - v >= m;
@@ -274,9 +325,10 @@ function gdInstances() {
 function gdLayout(key, i) {
   if (!state.gd || typeof state.gd !== "object" || Array.isArray(state.gd)) state.gd = {};
   let s = state.gd[key];
-  if (!s) s = state.gd[key] = { hgt: 20, lines: [], arcs: [] };
+  if (!s) s = state.gd[key] = { hgt: 20, lines: [], arcs: [], posts: [] };
   if (!Array.isArray(s.lines)) s.lines = [];
   if (!Array.isArray(s.arcs)) s.arcs = [];
+  if (!Array.isArray(s.posts)) s.posts = [];
   gdNormalize(s);
   if (i && !gdHeights(i.h).includes(s.hgt)) s.hgt = gdHeights(i.h).slice(-1)[0];
   return s;
@@ -290,7 +342,7 @@ function gdButton(st, l, ci, k) {
     if (r) r.scrollIntoView({ behavior: "smooth", block: "start" });
   } }, "✎ " + n);
 }
-const gdCount = key => { const s = state.gd && state.gd[key]; return s ? (Array.isArray(s.lines) ? s.lines.length : 0) + (Array.isArray(s.arcs) ? s.arcs.length : 0) : 0; };
+const gdCount = key => { const s = state.gd && state.gd[key]; return s ? (Array.isArray(s.lines) ? s.lines.length : 0) + (Array.isArray(s.arcs) ? s.arcs.length : 0) + (Array.isArray(s.posts) ? s.posts.length : 0) : 0; };
 function gdCopyLayouts(from, to) {
   if (!state.gd || typeof state.gd !== "object") return;
   for (const [k, s] of Object.entries(state.gd)) if (k.startsWith(from) && gdCount(k))
@@ -300,7 +352,7 @@ function gdCopyLayouts(from, to) {
 // części jednego układu: [{ rx, label, n }] (przegródki po długości, części brzegowe, zakończenia, piny)
 function gdParts(i, s) {
   const g = gdGeo(i.fam, i.d), res = gdResolve(g, s.lines, s.arcs || [], s.cross || []), out = new Map(), hs = s.hgt.toLocaleString(typeof locale === "function" ? locale() : undefined);
-  const add = (k, rx, label, n = 1, gen = null) => { const e = out.get(k) || { rx, label, n: 0, ...(gen ? { gen, file: gen.typ === "krzyz" ? gdCrossFile(gen) : gen.typ === "krotka" ? gdShortFile(gen) : gen.typ === "brzeg" ? gdEdgeFile(gen) : gen.typ === "pin" ? gdPinFile(gen) : gdArcFile(gen) } : {}) }; e.n += n; out.set(k, e); };
+  const add = (k, rx, label, n = 1, gen = null) => { const e = out.get(k) || { rx, label, n: 0, ...(gen ? { gen, file: gen.typ === "slupek" ? gdPostFile(gen) : gen.typ === "krzyz" ? gdCrossFile(gen) : gen.typ === "krotka" ? gdShortFile(gen) : gen.typ === "brzeg" ? gdEdgeFile(gen) : gen.typ === "pin" ? gdPinFile(gen) : gdArcFile(gen) } : {}) }; e.n += n; out.set(k, e); };
   let ok = 0, arcPins = 0;
   for (const [ai, A] of (s.arcs || []).entries()) {
     if (gdArcErr(g, A)) continue;
@@ -337,8 +389,19 @@ function gdParts(i, s) {
     extPins += GD_CANON[J.k].reduce((n, c, i) => n + gdExtPins(ext && ext[i], 1).length, 0);
     add(gdCrossFile(q), null, JL[J.k]() + (ext ? " " + tr("z przedłużeniem") : ""), 1, q);
   }
-  if (ok || arcPins || nx || shortPins) {
-    const n = 2 * ok + arcPins + nx + shortPins + extPins, pg = gdPinGen();
+  let postPins = 0, postShort = 0;  // słupek 1 pin – zwykły pin przegródki, 4 i 5 pinów – krótkie piny słupka
+  for (const [k, P] of (s.posts || []).entries()) {
+    if (gdPostErr(g, s, res, k)) continue;
+    const q = gdPostGen(P, i.h), v = { d: q.d, h: q.h.toLocaleString(typeof locale === "function" ? locale() : undefined) };
+    add(gdPostFile(q), null, gdPostLabel(q.piny, v), 1, q);
+    if (q.piny === 1) postPins += 1; else postShort += q.piny;
+  }
+  if (postShort) {
+    const pg = gdPinGen(), q = { typ: "pin", luz: pg ? pg.luz : 0.2, dol: pg ? pg.dol : state.gdPin === "loose" ? "l" : "t", krotki: true };
+    add(gdPinFile(q), null, tr("krótki pin słupka z luzem {l} mm", { l: q.luz.toLocaleString(typeof locale === "function" ? locale() : undefined) }), postShort, q);
+  }
+  if (ok || arcPins || nx || shortPins || postPins) {
+    const n = 2 * ok + arcPins + nx + shortPins + extPins + postPins, pg = gdPinGen();
     if (pg) add(gdPinFile(pg), null, tr("pin przegródki z luzem {l} mm", { l: pg.luz.toLocaleString(typeof locale === "function" ? locale() : undefined) }), n, pg);
     else add("pin", gdPinRx(state.gdPin === "loose" ? "loose" : "tight"), tr("pin przegródki"), n);
   }
@@ -362,7 +425,8 @@ function gdIssues() {
     const s = state.gd[i.key];
     if (!gdCount(i.key)) continue;
     const g = gdGeo(i.fam, i.d), lay = gdLayout(i.key, i);
-    const bad = gdResolve(g, lay.lines, lay.arcs, lay.cross).filter(r => r.err).length + lay.arcs.filter(A => gdArcErr(g, A)).length;
+    const rs = gdResolve(g, lay.lines, lay.arcs, lay.cross);
+    const bad = rs.filter(r => r.err).length + lay.arcs.filter(A => gdArcErr(g, A)).length + lay.posts.filter((P, k) => gdPostErr(g, lay, rs, k)).length;
     if (bad) out.push({ msg: tr("Przegródki Grid Dividers z błędem: {n} – nie trafiają na listę części ({where}).", { n: bad, where: i.label }),
       go: () => { state.tab = "gd"; state.gdCur = i.key; GD.sel = -1; update(); } });
   }
@@ -395,6 +459,12 @@ function gdVizLayout(key, fam, d, h) {
     if (ext) q.ext = ext;
     parts.push({ kind: "arc", u: A.u, v: A.v, r: A.r, kat: A.kat, a0: A.a0, ext: ext || ["", ""], gen: q, file: gdArcFile(q) });
   }
+  // słupki: środek (jednostki siatki), pół boku podstawy [mm], parametry bryły
+  s.posts.forEach((P, k) => {
+    if (gdPostErr(g, s, res, k)) return;
+    const q = gdPostGen(P, h);
+    parts.push({ kind: "post", c: gdPostC(P), half: gdPostHalf(P), gen: q, file: gdPostFile(q) });
+  });
   s.lines.forEach((L, li) => {
     const r = res[li];
     if (r.err || r.absorb) return;
@@ -448,10 +518,10 @@ function gdAddLine(s, L) {
 }
 function gdPreset(s, g, what) {
   histBreak();
-  if (what === "clear") { s.lines = []; s.arcs = []; s.cross = []; }
+  if (what === "clear") { s.lines = []; s.arcs = []; s.cross = []; s.posts = []; }
   if (what === "h2") gdAddLine(s, { o: "h", a: Math.round((g.R - 1) / 2), s: -1, e: g.C });
   if (what === "v2") gdAddLine(s, { o: "v", a: Math.round((g.C - 1) / 2), s: -1, e: g.R });
-  GD.sel = GD.selA = -1; save(); renderResult();
+  GD.sel = GD.selA = GD.selP = -1; save(); renderResult();
 }
 
 function renderGd(box) {
@@ -467,6 +537,9 @@ function renderGd(box) {
   const i = inst.find(x => x.key === state.gdCur), s = gdLayout(i.key, i), g = gdGeo(i.fam, i.d), res = gdResolve(g, s.lines, s.arcs, s.cross);
   if (GD.sel >= s.lines.length) GD.sel = -1;
   if (GD.selA >= s.arcs.length) GD.selA = -1;
+  if (GD.selP >= s.posts.length) GD.selP = -1;
+  const postHs = gdPostHeights(i.h);
+  if (!postHs.includes(GD.postH)) GD.postH = postHs[postHs.length - 1];  // domyślnie pełna wysokość szuflady
   const count = gdCount;
   const set = (k, v) => { histBreak(); s[k] = v; save(); renderResult(); };
   const setG = (k, v) => { state[k] = v; save(); renderResult(); };
@@ -488,20 +561,30 @@ function renderGd(box) {
   const tools = el("div", { class: "row" },
     el("button", { class: "small", onclick: () => gdPreset(s, g, "h2") }, tr("Na pół w poprzek")),
     el("button", { class: "small", onclick: () => gdPreset(s, g, "v2") }, tr("Na pół wzdłuż")),
-    el("button", { class: "small", disabled: GD.sel < 0 && GD.selA < 0, onclick: () => gdDelete(s) }, tr("Usuń")),
+    el("button", { class: "small", disabled: GD.sel < 0 && GD.selA < 0 && GD.selP < 0, onclick: () => gdDelete(s) }, tr("Usuń")),
     el("button", { class: "small", disabled: !count(i.key), onclick: () => { gdPreset(s, g, "clear"); toast(tr("Wyczyszczono przegródki szuflady")); } }, tr("Wyczyść")),
     same.length ? sel("", [["", tr("skopiuj z…")], ...same.map(x => [x.key, x.label])], v => {
       if (!v) return; histBreak(); s.lines = JSON.parse(JSON.stringify(state.gd[v].lines || [])); s.arcs = JSON.parse(JSON.stringify(state.gd[v].arcs || [])); s.cross = JSON.parse(JSON.stringify(state.gd[v].cross || []));
-      GD.sel = GD.selA = -1; save(); renderResult();
+      s.posts = JSON.parse(JSON.stringify(state.gd[v].posts || []));
+      GD.sel = GD.selA = GD.selP = -1; save(); renderResult();
     }) : null);
   // rysowanie: przegródka albo łuk 90° / 180° o promieniu r odstępów (środek – otwór, kierunek – przeciągnięciem)
   const draw = el("div", { class: "row" }, lab(tr("Rysuj:"), tr("Łuk: kliknij otwór w środku łuku i przeciągnij w stronę, w którą ma się wyginać. Końce łuku leżą w otworach – dociągnij do nich przegródki.")),
-    sel(GD.mode, [["line", tr("przegródkę")], ["a90", tr("łuk 90°")], ["a180", tr("łuk 180° (zawrót)")]], v => { GD.mode = v; renderResult(); }),
-    GD.mode !== "line" || GD.selA >= 0 ? [lab(tr("Promień:"), tr("Promień łuku w odstępach siatki (10,5 mm), mierzony do osi przegródki.")),
+    sel(GD.mode, [["line", tr("przegródkę")], ["a90", tr("łuk 90°")], ["a180", tr("łuk 180° (zawrót)")], ["p1", tr("słupek (1 pin)")], ["p4", tr("słupek (4 piny)")], ["p5", tr("słupek (5 pinów)")]], v => { GD.mode = v; renderResult(); }),
+    (GD.mode === "a90" || GD.mode === "a180") || GD.selA >= 0 ? [lab(tr("Promień:"), tr("Promień łuku w odstępach siatki (10,5 mm), mierzony do osi przegródki.")),
       sel(GD.selA >= 0 ? s.arcs[GD.selA].r : GD.rad, Array.from({ length: 9 }, (_, k) => [k + 2, `${k + 2} (${((k + 2) * GD_PITCH).toLocaleString(locale())} mm)`]),
         v => { if (GD.selA >= 0) gdArcSet(s, { r: +v }); else { GD.rad = +v; renderResult(); } })] : null,
     GD.selA >= 0 ? [el("button", { class: "small", title: tr("Obróć zaznaczony łuk o 90° (klawisz R)"), onclick: () => gdArcSet(s, { a0: (s.arcs[GD.selA].a0 + 90) % 360 }) }, "↻ " + tr("Obróć")),
-      el("span", { class: "hint" }, tr("Zaznaczony łuk: przeciągnij, żeby przesunąć, albo strzałki – o jeden otwór."))] : null);
+      el("span", { class: "hint" }, tr("Zaznaczony łuk: przeciągnij, żeby przesunąć, albo strzałki – o jeden otwór."))] : null,
+    // słupek: średnica i wysokość nowego albo zaznaczonego (wysokości do wysokości szuflady)
+    gdPostMode(GD.mode) || GD.selP >= 0 ? (() => {
+      const P = GD.selP >= 0 ? s.posts[GD.selP] : null, ps = (k, v) => { if (P) { histBreak(); P[k] = v; save(); } else GD[k === "d" ? "postD" : "postH"] = v; renderResult(); };
+      return [lab(tr("Słupek:"), tr("Słupek z pinami w otworach dna: 1 pin – nad otworem, okrągła podstawa 3 mm; 4 piny – na środku kratki między otworami (podstawa 20 mm); 5 pinów – nad otworem (podstawa 30 mm). Średnica – stopa łuku przy podstawie, u góry szyjka Ø 5 mm. Kliknij w siatkę, żeby go postawić; kliknij słupek, żeby go zaznaczyć.")),
+        sel(P ? P.d : GD.postD, GD_POST_D.map(x => [x, "Ø " + x + " mm"]), v => ps("d", +v)),
+        sel(P ? (postHs.includes(P.h) ? P.h : postHs[postHs.length - 1]) : GD.postH, postHs.map(x => [x, x.toLocaleString(locale()) + " mm (" + ({ 34.5: "1F", 82.5: "2F", 178.5: "4F" })[x] + ")"]), v => ps("h", +v))];
+    })() : null);
+  const postWarn = (s.posts.length || gdPostMode(GD.mode)) && !gdPostOk()
+    ? serverNote(tr("Słupki generuje serwer konfiguratora (wersja generatora {v}) – uruchom konfigurator ponownie po aktualizacji.", { v: GD_POST_VER }), "err") : null;
   const arcWarn = (s.arcs.length || s.lines.length || GD.mode !== "line") && !gdArcOk()
     ? serverNote(tr("Łuki, łączniki, krótkie przegródki i części brzegowe na wymiar generuje serwer konfiguratora (biblioteka manifold3d, wersja generatora 26) – uruchom konfigurator ponownie po aktualizacji."), "err") : null;
 
@@ -512,12 +595,13 @@ function renderGd(box) {
     return el("li", {}, `${p.n}× ${p.label}`, f ? null : el("span", { class: "err" }, " – " + tr("brak pliku w bibliotece")));
   }));
   const errs = [...res.map((r, k) => r.err ? el("li", { class: "err" }, tr("Przegródka {k}: {err}", { k: k + 1, err: r.err })) : null),
-    ...s.arcs.map((A, k) => { const e = gdArcErr(g, A); return e ? el("li", { class: "err" }, tr("Łuk {k}: {err}", { k: k + 1, err: e })) : null; })].filter(Boolean);
+    ...s.arcs.map((A, k) => { const e = gdArcErr(g, A); return e ? el("li", { class: "err" }, tr("Łuk {k}: {err}", { k: k + 1, err: e })) : null; }),
+    ...s.posts.map((P, k) => { const e = gdPostErr(g, s, res, k); return e ? el("li", { class: "err" }, tr("Słupek {k}: {err}", { k: k + 1, err: e })) : null; })].filter(Boolean);
 
   // null (brak ostrzeżenia) wstawiałby tekst „null” – filtr (zrzut użytkownika 2026-11-05)
   box.replaceChildren(...[el("h3", {}, tr("Przegródki szuflad (Grid Dividers)")), head, opts,
     el("p", { class: "hint" }, tr("Przeciągnij wzdłuż rzędu albo kolumny otworów, żeby wstawić przegródkę; poza ostatni otwór – do ścianki. Kliknij przegródkę, żeby ją zaznaczyć (Delete – usuń, Esc – odznacz). Połączenia przegródek (T, narożnik, skrzyżowanie) dostają łączniki: trójnik, kątownik, krzyżak.")),
-    tools, draw, arcWarn, el("div", { class: "gd-wrap" }, gdEditor(i, s, g, res),
+    tools, draw, arcWarn === null ? postWarn : arcWarn, el("div", { class: "gd-wrap" }, gdEditor(i, s, g, res),
       el("div", { class: "gd-side" }, el("b", {}, tr("Części dla tej szuflady (× {n}):", { n: i.qty })),
         parts.length ? list : el("p", { class: "hint" }, tr("Brak przegródek.")), errs.length ? el("ul", {}, errs) : null,
         el("p", { class: "hint" }, tr("Długości jak w plikach USSA: liczba w nazwie to liczba odstępów 10,5 mm. Przy ściance – przegródka i część brzegowa (szczelnie), przy innej przegródce – sama przegródka."))))].filter(Boolean));
@@ -537,10 +621,12 @@ function gdArcSet(s, ch) {
   histBreak(); Object.assign(A, ch); save(); renderResult();
 }
 function gdDelete(s) {
-  if (GD.sel < 0 && GD.selA < 0) return;
+  if (GD.sel < 0 && GD.selA < 0 && GD.selP < 0) return;
   histBreak();
-  if (GD.sel >= 0) { s.lines.splice(GD.sel, 1); gdNormalize(s); } else s.arcs.splice(GD.selA, 1);
-  GD.sel = GD.selA = -1; save(); renderResult(); toast(tr("Usunięto przegródkę"));
+  const post = GD.selP >= 0;
+  if (post) s.posts.splice(GD.selP, 1);
+  else if (GD.sel >= 0) { s.lines.splice(GD.sel, 1); gdNormalize(s); } else s.arcs.splice(GD.selA, 1);
+  GD.sel = GD.selA = GD.selP = -1; save(); renderResult(); toast(post ? tr("Usunięto słupek") : tr("Usunięto przegródkę"));
 }
 
 // siatka otworów: przód na dole (jak w zakładce pojemników), skala dopasowana do szerokości
@@ -610,6 +696,15 @@ function gdEditor(i, s, g, res) {
     const ext = gdArcExt(res, ai);
     if (ext) gdArcEnds(A).forEach(({ E, d }, k) => { for (const j of gdExtPins(ext[k])) pins.add(`${E[0] + j * d[0]},${E[1] + j * d[1]}`); });
   }
+  // słupki: podstawa (kwadrat 20 / 30 mm) i trzon (koło Ø d) – klik zaznacza
+  s.posts.forEach((P, pi) => {
+    const err = gdPostErr(g, s, res, pi), [cu, cv] = gdPostC(P), B = gdPostHalf(P), dd = (GD_POST_D.includes(P.d) ? P.d : 12) * k;
+    box.append(el("div", { class: "gd-bar base" + (err ? " bad foot" : ""), style: `left:${(X(cu) - B * k).toFixed(1)}px;top:${(Y(cv) - B * k).toFixed(1)}px;width:${(2 * B * k).toFixed(1)}px;height:${(2 * B * k).toFixed(1)}px` + (gdPostP(P) === 1 ? ";border-radius:50%" : "") }));
+    box.append(el("div", { class: "gd-post" + (err ? " bad" : "") + (pi === GD.selP ? " sel" : ""), "data-post": pi,
+      title: err || gdPostLabel(gdPostP(P), { d: GD_POST_D.includes(P.d) ? P.d : 12, h: (gdPostGen(P, i.h).h).toLocaleString(locale()) }),
+      style: `left:${(X(cu) - dd / 2).toFixed(1)}px;top:${(Y(cv) - dd / 2).toFixed(1)}px;width:${dd.toFixed(1)}px;height:${dd.toFixed(1)}px` }));
+    if (!err) for (const [u, v] of gdPostPins(P)) pins.add(`${u},${v}`);
+  });
   const dot = Math.max(3, 4 * k);
   for (let jj = 0; jj < g.R; jj++) for (let ii = 0; ii < g.C; ii++)
     box.append(el("div", { class: "gd-hole" + (pins.has(`${ii},${jj}`) ? " pin" : ""),
@@ -642,9 +737,9 @@ function gdEditor(i, s, g, res) {
   };
   box.addEventListener("pointerdown", e => {
     if (e.button !== 0) return;
-    const t = e.target.closest("[data-line]"), ta = e.target.closest("[data-arc]");
+    const t = e.target.closest("[data-line]"), ta = e.target.closest("[data-arc]"), tp = e.target.closest("[data-post]");
     // zaznaczony łuk – przeciągnięcie przesuwa go po otworach (prośba użytkownika: trudno trafić od razu)
-    GD.drag = { p0: at(e), line: t ? +t.dataset.line : -1, arc: ta ? +ta.dataset.arc : -1, moved: false, move: !!ta && +ta.dataset.arc === GD.selA };
+    GD.drag = { p0: at(e), line: t ? +t.dataset.line : -1, arc: ta ? +ta.dataset.arc : -1, post: tp ? +tp.dataset.post : -1, moved: false, move: !!ta && +ta.dataset.arc === GD.selA };
     box.setPointerCapture(e.pointerId);
   });
   box.addEventListener("pointermove", e => {
@@ -655,6 +750,7 @@ function gdEditor(i, s, g, res) {
       GD.drag.d = d; drawArcs(null, d);
       return;
     }
+    if (gdPostMode(GD.mode)) return;  // słupek – na kliknięcie
     if (GD.mode !== "line") {
       const A = arcOf(GD.drag.p0, at(e));
       if (A) GD.drag.moved = true;
@@ -676,6 +772,14 @@ function gdEditor(i, s, g, res) {
       if (d.moved && d.d) gdMoveArc(s, g, d.d[0], d.d[1]); else { GD.selA = -1; renderResult(); }
       return;
     }
+    // słupek: kliknięcie w słupek – zaznaczenie, w siatkę – nowy słupek (4 piny – kratka pod kursorem, 5 – najbliższy otwór)
+    if (d.post >= 0) { GD.selP = d.post === GD.selP ? -1 : d.post; GD.sel = GD.selA = -1; renderResult(); return; }
+    if (gdPostMode(GD.mode)) {
+      const p = +GD.mode[1], [x, y] = d.p0;
+      const u = p === 4 ? Math.floor(x) : Math.round(x), v = p === 4 ? Math.floor(y) : Math.round(y);
+      histBreak(); s.posts.push({ u, v, p, d: GD.postD, h: GD.postH }); GD.sel = GD.selA = -1; GD.selP = s.posts.length - 1;
+      save(); renderResult(); return;
+    }
     if (d.moved && GD.mode !== "line") {
       const A = arcOf(d.p0, at(e));
       if (A && !s.arcs.some(x => x.u === A.u && x.v === A.v && x.r === A.r && x.kat === A.kat && x.a0 === A.a0)) { histBreak(); s.arcs.push(A); save(); }
@@ -686,6 +790,7 @@ function gdEditor(i, s, g, res) {
     if (!d.moved) {
       if (d.arc >= 0) { GD.selA = d.arc === GD.selA ? -1 : d.arc; GD.sel = -1; }
       else { GD.sel = d.line === GD.sel ? -1 : d.line; GD.selA = -1; }
+      GD.selP = -1;
       renderResult();
     }
   };
@@ -698,9 +803,9 @@ document.addEventListener("keydown", e => {
   if (typeof state === "undefined" || state.tab !== "gd" || (e.target.closest && e.target.closest("input, select, textarea"))) return;
   const s = state.gd && state.gd[state.gdCur];
   if (!s) return;
-  if (e.key === "Delete" && (GD.sel >= 0 || GD.selA >= 0)) { e.preventDefault(); gdDelete(s); }
+  if (e.key === "Delete" && (GD.sel >= 0 || GD.selA >= 0 || GD.selP >= 0)) { e.preventDefault(); gdDelete(s); }
   const mv = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];  // w górę = do tyłu
   if (mv && GD.selA >= 0) { e.preventDefault(); const i = gdInstances().find(x => x.key === state.gdCur); if (i) gdMoveArc(s, gdGeo(i.fam, i.d), ...mv); }
   if ((e.key === "r" || e.key === "R") && GD.selA >= 0 && !e.ctrlKey && !e.metaKey) { e.preventDefault(); gdArcSet(s, { a0: (s.arcs[GD.selA].a0 + 90) % 360 }); }
-  if (e.key === "Escape" && (GD.sel >= 0 || GD.selA >= 0)) { GD.sel = GD.selA = -1; renderResult(); }
+  if (e.key === "Escape" && (GD.sel >= 0 || GD.selA >= 0 || GD.selP >= 0)) { GD.sel = GD.selA = GD.selP = -1; renderResult(); }
 });

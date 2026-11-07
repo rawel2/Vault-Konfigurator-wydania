@@ -175,6 +175,11 @@ td.done-cell { white-space: nowrap; }
 .gd-bar.bad.wall { background: var(--warn-bg); color: var(--warn); outline: 2px solid var(--warn); }
 .gd-bar.bad.foot { background: color-mix(in srgb, var(--warn) 15%, transparent); }
 .gd-bar.pick { border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 25%, transparent); pointer-events: none; }
+/* słupki: podstawa (kwadrat) i trzon (koło) – klikalny */
+.gd-post { position: absolute; box-sizing: border-box; border-radius: 50%; background: color-mix(in srgb, var(--accent) 75%, var(--panel)); cursor: pointer; }
+.gd-post.sel { background: var(--accent); outline: 2px solid var(--ink); }
+.gd-post.bad { background: var(--warn-bg); outline: 2px solid var(--warn); }
+.gd-bar.base { background: color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 4px; }
 td.plates { white-space: nowrap; font-variant-numeric: tabular-nums; cursor: help; }
 td.plates.stale { color: var(--warn); }
 td.done-cell input { width: 48px; }
@@ -474,7 +479,7 @@ td.est.geom { color: var(--muted); }
   <a href="https://github.com/rawel2/Vault-Konfigurator-wydania/releases/latest" target="_blank" rel="noopener" data-tr>Instrukcja i aktualizacje</a>
 </footer>
 
-<script>window.VAULT_WEB = {"wersja": "1.1.38+", "commit": "88f1006"};</script>
+<script>window.VAULT_WEB = {"wersja": "1.1.39", "commit": "38d29fb"};</script>
 <script>
   // pliki z danymi zmieniają się po skanowaniu – wczytuj je zawsze świeże (bez pamięci podręcznej przeglądarki)
   for (const f of ["katalog.js", "dane_druku.js", "drukarki.js", "tlumaczenia.js"])
@@ -1188,6 +1193,7 @@ function buildBom() {
   }
   if (typeof binAddToBom === "function") binAddToBom(b);  // pojemniki gridfinity z układów (pojemniki.js)
   if (typeof gdAddToBom === "function") gdAddToBom(b);  // przegródki Grid Dividers z układów (przegrodki.js)
+  if (typeof glowAddToBom === "function") glowAddToBom(b);  // wkłady na głowice w szufladach S (pojemniki.js)
   if (typeof labAddToBom === "function") labAddToBom(b);  // etykiety z napisem zamiast pustych (etykiety.js)
   if (typeof logoAddToBom === "function") logoAddToBom(b);  // fronty z logo zamiast frontów USSA (logo.js)
   // „puste etykiety (Label) na liście części” wyłączone (prośba użytkownika 2026-11-03: „nie drukuj labelek” – zapamiętane
@@ -1300,15 +1306,22 @@ function renderColumn(st, l, c, fam, ci) {
     if (has("with 1 handle")) opts.push(["grid1", tr("gridfinity z 1 uchwytem")]);
     // przegródki Grid Dividers w otworach dna (przegrodki.js) – zamiast płyty gridfinity, która zasłania otwory
     opts.push(["dividers", tr("przegródki Grid Dividers")]);
+    // wkład na głowice Bambu na całe pudełko (glowice.py, pojemniki.js – glowPanel) – tylko szuflady S
+    if (fam === "S") opts.push(["glowice", tr("wkład na głowice Bambu Lab")]);
     const ok = v => opts.some(([o]) => o === v) ? v : "grid";  // zapisany wariant, którego nie ma – zwykła płyta (lista części i tak ją brała)
     if (!opts.some(([v]) => v === c.insert)) c.insert = "grid";
     if (Array.isArray(c.ins)) c.ins = c.ins.map(ok);
     const tip = tr("Płyta gridfinity na dnie pudełka – na niej stoją pojemniki gridfinity (zakładka „Pojemniki gridfinity”); albo przegródki Grid Dividers wsuwane w otwory dna (zakładka „Przegródki”).");
     // przycisk edytora przy szufladzie: pojemniki gridfinity (pojemniki.js) albo przegródki (przegrodki.js)
     const edit = k => insGrid(insOf(c, k)) && typeof binButton === "function" ? binButton(st, l, ci, k)
-      : insOf(c, k) === "dividers" && typeof gdButton === "function" ? gdButton(st, l, ci, k) : null;
+      : insOf(c, k) === "dividers" && typeof gdButton === "function" ? gdButton(st, l, ci, k)
+      : insOf(c, k) === "glowice" && typeof glowButton === "function" ? glowButton(st, l, ci, k) : null;
+    // otwarty formularz wkładu na głowice pod wierszem szuflady
+    const panel = k => insOf(c, k) === "glowice" && typeof glowPanel === "function" && GLOW.open === binKey(st, l, ci, k) ? glowPanel(GLOW.open, st.depth) : null;
     if (c.pattern.length === 1) {
       box.append(el("div", { class: "row" }, lab(tr("Wkład:"), tip), sel(insOf(c, 0), opts, v => { c.insert = v; delete c.ins; update(); }), edit(0)));
+      const pn = panel(0);
+      if (pn) box.append(pn);
     } else {
       // kilka szuflad w module: wkład osobno dla każdej (od góry), przy niej przycisk edytora; „wszystkie” – jeden wkład modułu
       const same = c.pattern.every((_, k) => insOf(c, k) === insOf(c, 0));
@@ -1317,6 +1330,7 @@ function renderColumn(st, l, c, fam, ci) {
         el("span", { class: "hint" }, tr("wszystkie szuflady"))));
       c.pattern.forEach((h, k) => box.append(el("div", { class: "row ins-k" }, el("span", { class: "hint" }, tr("szuflada {k} ({h}F):", { k: k + 1, h })),
         sel(insOf(c, k), opts, v => { c.ins = c.pattern.map((_, j) => insOf(c, j)); c.ins[k] = v; update(); }), edit(k))));
+      c.pattern.forEach((h, k) => { const pn = panel(k); if (pn) box.append(pn); });
     }
   } else {
     if (fam === "L" || fam === "XL")
@@ -1359,6 +1373,7 @@ function renderLayer(st, l, i) {
         const c = JSON.parse(JSON.stringify(l)); c.id = uid++; st.layers.splice(i + 1, 0, c);
         if (typeof binCopyLayouts === "function") binCopyLayouts(`i:${st.id}:${l.id}:`, `i:${st.id}:${c.id}:`);  // pojemniki gridfinity też
         if (typeof gdCopyLayouts === "function") gdCopyLayouts(`i:${st.id}:${l.id}:`, `i:${st.id}:${c.id}:`);  // i przegródki
+        if (typeof glowCopyLayouts === "function") glowCopyLayouts(`i:${st.id}:${l.id}:`, `i:${st.id}:${c.id}:`);  // i wkłady na głowice
         update();
       } }, "⧉"),
       el("button", { class: "small", title: tr("usuń"), disabled: n === 1, onclick: () => {
@@ -2237,6 +2252,7 @@ $("btnDupStack").onclick = () => {
   const o = cur(), c = JSON.parse(JSON.stringify(o)); c.id = uid++; c.name += " " + tr("(kopia)"); c.layers.forEach(l => l.id = uid++);
   if (typeof binCopyLayouts === "function") c.layers.forEach((l, j) => binCopyLayouts(`i:${o.id}:${o.layers[j].id}:`, `i:${c.id}:${l.id}:`));
   if (typeof gdCopyLayouts === "function") c.layers.forEach((l, j) => gdCopyLayouts(`i:${o.id}:${o.layers[j].id}:`, `i:${c.id}:${l.id}:`));
+  if (typeof glowCopyLayouts === "function") c.layers.forEach((l, j) => glowCopyLayouts(`i:${o.id}:${o.layers[j].id}:`, `i:${c.id}:${l.id}:`));
   state.stacks.splice(state.current + 1, 0, c); state.current++; update();
 };
 // usunięcie zestawu bez pytania – komunikat z „Cofnij” (i Ctrl+Z) zamiast okna potwierdzenia

@@ -183,6 +183,14 @@ function binNapisy(p) {
   while (n.length && !n[n.length - 1].t.trim() && !n[n.length - 1].s) n.pop();
   return n;
 }
+// pojemnik na głowice Bambu (glowice.py, 2026-11-07): gniazda [{ r: std|ind, t: napis }] i skarpety – jak glowice.parametry
+const BIN_GLOW_VER = 32;
+function binGlowice(p) {
+  const g = (Array.isArray(p.glowice) ? p.glowice : []).slice(0, 40).map(x => ({ r: x && x.r === "ind" ? "ind" : "std", t: String((x && x.t) || "").slice(0, 12) }));
+  const s = Math.max(0, Math.min(40, parseInt(p.skarpety, 10) || 0));
+  return [g, s];
+}
+const binIsGlow = p => { const [g, s] = binGlowice(p); return g.length > 0 || s > 0; };
 const binFull = it => { const p = { ...it.p, w: it.w, d: it.d }; p.napisy = binNapisy(p); return p; };
 // Płyty USSA skrzynek M i L (pomiar wszystkich plików 2026-11-01; XL przez analogię – pliki pod kątem, niezmierzone) nie
 // mają kieszeni na środku przedniego rzędu (pole zabudowane z wycięciem na palec przy krawędzi) – zgłoszenie użytkownika:
@@ -212,6 +220,10 @@ const BIN_ASK = new Set();
 let BIN_ASK_T = 0;
 // nazwa jak pojemniki.nazwa() w Pythonie (ta sama nazwa pliku w ZIP-ie, w liście części i w folderze stl/)
 function binName(p) {
+  if (p.typ === "wklad_glowic") {  // wkład na głowice na całe pudełko S – jak pojemniki.nazwa
+    const [g, s] = binGlowice(p);
+    return `wklad_glowic_S${p.d}_` + labFnv(g.map(x => `${x.r}~${x.t}`).join("|") + `|s${s}|` + (p.styl_napisu === "wklesly" ? "wklesly" : "wpuszczony")).slice(0, 6);
+  }
   if (p.typ === "plyta") {
     let n = `gridfinity_plyta_${p.c}x${p.r}_${Math.round(p.sx * 10) / 10}x${Math.round(p.sy * 10) / 10}`;
     if (p.magnesy) n += "_magnesy";
@@ -219,6 +231,12 @@ function binName(p) {
     return n;
   }
   let n = `gridfinity_${p.w}x${p.d}x${p.h}`;
+  if (binIsGlow(p) && typeof labFnv === "function") {  // jak pojemniki._nazwa_pojemnika: bez przegródek, półki, uchwytu i dna
+    const [g, s] = binGlowice(p);
+    if (!p.rant) n += "_bez_rantu";
+    if (p.magnesy) n += "_magnesy";
+    return n + "_glowice_" + labFnv(g.map(x => `${x.r}~${x.t}`).join("|") + `|s${s}|` + (p.styl_napisu === "wklesly" ? "wklesly" : "wpuszczony")).slice(0, 6);
+  }
   if (p.nx * p.ny > 1) n += `_przegr_${p.nx}x${p.ny}`;
   n += { tyl: "_etykieta", przod: "_etykieta_przod", brak: "" }[p.etykieta] || "";
   if (p.uchwyt) n += "_uchwyt";
@@ -280,7 +298,7 @@ function binAskMeta(file) {
     try {
       const r = await api("/api/pojemnik/meta", { bins: files.map(f => BIN_GEN.get(f)) });
       r.meta.forEach((m, i) => BIN_META.set(files[i], m));
-      renderResult();
+      if (GLOW.open) render(); else renderResult();  // otwarty formularz wkładu na głowice – „nie mieści się” w edytorze
     } catch (e) { files.forEach(f => BIN_ASK.delete(f)); console.warn("pojemniki – opis", e); }
   }, 100);
 }
@@ -549,7 +567,7 @@ function binGridEl(set, rerender) {
       style: `left:${it.x * C + 2}px;top:${(gr - it.y - it.d) * C + 2}px;width:${it.w * C - 4}px;height:${it.d * C - 4}px`,
       title: tr("kliknij, aby wybrać"),
       onpointerdown: e => { e.stopPropagation(); BIN.sel = BIN.sel === i ? -1 : i; rerender(); } },
-      `${it.w}×${it.d}×${it.p.h}`));
+      `${it.w}×${it.d}×${it.p.h}` + (binIsGlow(it.p) ? " ⌀" : "")));
   });
   const pick = el("div", { class: "bin-pick", hidden: true });
   g.append(pick);
@@ -596,9 +614,19 @@ function binForm(set, rerender) {
     kids.push(el("h3", {}, tr("Nowe pojemniki")),
       el("p", { class: "hint" }, tr("Przeciągnij po wolnych kratkach, aby wstawić pojemnik; kliknij pojemnik, aby go zmienić.")));
   }
+  const glow = it && binIsGlow(q);
+  if (it) kids.push(row(tr("rodzaj"), sel(glow ? "glow" : "zwykly", [["zwykly", tr("zwykły pojemnik")], ["glow", tr("na głowice Bambu Lab")]], v => {
+    if (v === "glow") { q.glowice = [{ r: "std", t: "0.4" }]; q.skarpety = 0; q.h = Math.min(4, mx); }
+    else { q.glowice = []; q.skarpety = 0; }
+    save(); rerender();
+  })));
   kids.push(
     row(tr("wysokość (× 7 mm)"), num(q.h, ch("h"), 2, 26)),
-    el("p", { class: q.h > mx ? "err" : "hint" }, tr("Tu zmieści się najwyżej {n} jedn.", { n: mx })),
+    el("p", { class: q.h > mx ? "err" : "hint" }, tr("Tu zmieści się najwyżej {n} jedn.", { n: mx })));
+  if (glow) {
+    kids.push(chk(q.rant, tr("rant do układania pojemników jeden na drugim"), ch("rant")),
+      chk(q.magnesy, tr("otwory na magnesy 6 × 2 mm w spodzie"), ch("magnesy")), binGlowForm(it, q, rerender));
+  } else kids.push(
     row(tr("przegródki wzdłuż szerokości"), num(q.nx, ch("nx"), 1, it ? 4 * it.w : 8)),
     row(tr("przegródki wzdłuż głębokości"), num(q.ny, ch("ny"), 1, it ? 4 * it.d : 8)),
     row(tr("półka na etykietę"), sel(q.etykieta, [["tyl", tr("z tyłu")], ["przod", tr("z przodu")], ["brak", tr("bez półki")]], ch("etykieta"))),
@@ -607,7 +635,7 @@ function binForm(set, rerender) {
     chk(q.magnesy, tr("otwory na magnesy 6 × 2 mm w spodzie"), ch("magnesy")),
     // lekkie dno – tylko bez magnesów (z magnesami pełne, decyzja użytkownika)
     q.magnesy ? null : chk(q.lekkie !== false, tr("lekkie dno – wnętrze kratek wyżłobione w stopce (dno ok. 1 mm zamiast 6 mm)"), ch("lekkie")));
-  if (it && q.etykieta !== "brak") kids.push(binNapisyForm(it, q, rerender));
+  if (it && !glow && q.etykieta !== "brak") kids.push(binNapisyForm(it, q, rerender));
   const btns = [];
   if (it) {
     btns.push(el("button", { onclick: () => binDownloadOne(it) }, tr("Pobierz STL")),
@@ -621,6 +649,106 @@ function binForm(set, rerender) {
   }
   kids.push(el("div", { class: "row", style: "margin-top:8px" }, ...btns));
   return el("div", { class: "bin-form" }, ...kids);
+}
+
+// gniazda na głowice wybranego pojemnika: rodzaj i napis (rozmiar dyszy) każdego gniazda, skarpety, styl i kolor napisów
+function binGlowForm(it, q, rerender) {
+  const e = BIN.cache.get(JSON.stringify(binFull(it)));
+  return glowSlotsBox(q, rerender, e && e.meta && e.meta.nofit, tr("Gniazda na głowice"),
+    tr("Głowice leżą czubkiem do przodu, przed czubkiem napis (np. rozmiar dyszy). Głębokość co najmniej 2 kratki; 3 kratki wszerz mieszczą 6 standardowych albo 7 indukcyjnych."));
+}
+// lista gniazd (pojemnik i wkład na całe pudełko): rodzaj i napis każdego gniazda, skarpety, styl i kolor napisów
+function glowSlotsBox(q, rerender, nofit, title, hint, ver = BIN_GLOW_VER) {
+  const a = document.activeElement, pisze = a && a.classList && a.classList.contains("bin-glow")
+    ? [a.dataset.k, a.selectionStart, a.selectionEnd] : null;
+  const [g, s] = binGlowice(q);
+  const put = () => { q.glowice = g; q.skarpety = s; save(); rerender(); };
+  const RODZ = [["std", tr("standardowa (H2D, H2S, P2S, X2D)")], ["ind", tr("indukcyjna (H2C)")]];
+  nofit = nofit || [0, 0];
+  const wkl = q.styl_napisu === "wklesly";
+  const box = el("div", { class: "bin-nap-box" }, el("h3", {}, title), el("p", { class: "hint" }, hint));
+  if ((SERVER.pojemnikiWer || 1) < ver)
+    box.append(el("p", { class: "err" }, tr("Pojemniki na głowice wymagają nowszego serwera – zamknij okno konfiguratora i uruchom go ponownie.")));
+  g.forEach((x, i) => {
+    const inp = el("input", { type: "text", class: "bin-glow", "data-k": i, maxlength: 12, placeholder: tr("napis"), style: "width:70px",
+      oninput: ev => { q.glowice = g; g[i].t = ev.target.value; save(); clearTimeout(BIN.napT); BIN.napT = setTimeout(rerender, 500); } });
+    inp.value = x.t;
+    box.append(el("div", { class: "row" }, el("span", { class: "q" }, String(i + 1)),
+      sel(x.r, RODZ, v => { g[i].r = v; put(); }), inp,
+      el("button", { class: "small", title: tr("Usuń"), onclick: ev => { ev.preventDefault(); g.splice(i, 1); put(); } }, "✕")));
+  });
+  box.append(el("div", { class: "row" },
+    el("button", { class: "small", onclick: ev => { ev.preventDefault(); g.push({ r: "std", t: g.length ? g[g.length - 1].t : "0.4" }); put(); } }, tr("+ standardowa")),
+    el("button", { class: "small", onclick: ev => { ev.preventDefault(); g.push({ r: "ind", t: g.length ? g[g.length - 1].t : "0.4" }); put(); } }, tr("+ indukcyjna"))),
+    el("label", { class: "bin-row" }, el("span", {}, tr("gniazda na skarpety silikonowe")), num(s, v => { q.glowice = g; q.skarpety = v; save(); rerender(); }, 0, 40)));
+  if (nofit[0] || nofit[1])
+    box.append(el("p", { class: "err" }, tr("Nie mieści się: głowic {g}, skarpet {s} – powiększ pojemnik albo usuń gniazda.", { g: nofit[0], s: nofit[1] })));
+  box.append(el("label", { class: "bin-row" }, el("span", {}, tr("styl napisu")), sel(wkl ? "wklesly" : "wpuszczony",
+      [["wpuszczony", tr("wpuszczony – drugi filament, równo z półką")], ["wklesly", tr("wklęsły – jeden kolor")]], v => { q.styl_napisu = v; save(); rerender(); })),
+    wkl ? null : el("label", { class: "bin-row" }, el("span", {}, tr("kolor napisu (wspólny z etykietami)")),
+      sel(state.labelTextColor || "#000000", COLOR_PALETTE.map(([h, nm]) => [h, tr(nm)]), v => { state.labelTextColor = v; save(); rerender(); })));
+  if (pisze) requestAnimationFrame(() => {
+    const f = document.querySelector(`.bin-glow[data-k="${pisze[0]}"]`);
+    if (f) { f.focus(); f.setSelectionRange(pisze[1], pisze[2]); }
+  });
+  return box;
+}
+
+// ---------- wkład na głowice na całe pudełko szuflady S (glowice.py, 2026-11-07, prośba użytkownika) ----------
+// Wkład w szufladzie (pole „Wkład” = glowice, tylko S): state.glowWkl { klucz szuflady (binKey): { glowice, skarpety,
+// styl_napisu } } z projektem; na liście części plik „@gridfinity/wklad_glowic_S<d>_<skrót>.stl” w grupie „Wkłady”.
+const GLOW = { open: "" };
+const GLOW_WKLAD_VER = 33;
+function glowLayout(key) {
+  if (!state.glowWkl || typeof state.glowWkl !== "object" || Array.isArray(state.glowWkl)) state.glowWkl = {};
+  return state.glowWkl[key] = state.glowWkl[key] || { glowice: [{ r: "std", t: "0.4" }], skarpety: 0 };
+}
+function glowParams(key, d) {
+  const q = glowLayout(key), [g, s] = binGlowice(q);
+  return { typ: "wklad_glowic", d: Math.max(3, Math.min(7, d)), glowice: g, skarpety: s, styl_napisu: q.styl_napisu === "wklesly" ? "wklesly" : "wpuszczony" };
+}
+function glowInstances() {
+  const out = [];
+  for (const st of state.stacks) st.layers.forEach((l, li) => l.cols.forEach((c, ci) => {
+    if (l.type !== "D" || FAMILIES[l.layout][ci] !== "S") return;
+    const side = l.cols.length > 1 ? (ci === 0 ? tr("lewa") : tr("prawa")) : "";
+    const where = [st.name, li === 0 ? tr("Warstwa 1 (spód)") : tr("Warstwa {n}", { n: li + 1 })];
+    c.pattern.forEach((h, k) => insOf(c, k) === "glowice" && out.push({ key: binKey(st, l, ci, k), d: st.depth, qty: st.qty,
+      label: [...where, [tr("szuflada {fam}{d} {h}F", { fam: "S", d: st.depth, h }), side, c.pattern.length > 1 ? tr("szuflada {k} od góry", { k: k + 1 }) : ""]
+        .filter(Boolean).join(", ")].join(" · ") }));
+  }));
+  return out;
+}
+function glowAddToBom(b) {
+  for (const i of glowInstances()) {
+    const p = glowParams(i.key, i.d);
+    if (p.glowice.length || p.skarpety) b.addGen("Wkłady", i.label, binFileOf(p), i.qty, p);
+  }
+}
+function glowButton(st, l, ci, k) {
+  const key = binKey(st, l, ci, k), n = binGlowice(glowLayout(key))[0].length;
+  return el("button", { class: "small" + (GLOW.open === key ? " on" : ""), title: tr("Gniazda na głowice w tej szufladzie ({n})", { n }),
+    onclick: () => { GLOW.open = GLOW.open === key ? "" : key; update(); } }, "✎ " + n);
+}
+// formularz pod polem „Wkład” w edytorze zestawu (otwierany przyciskiem ✎)
+function glowPanel(key, d) {
+  const q = glowLayout(key), p = glowParams(key, d), f = binFileOf(p), meta = BIN_META.get(f);
+  if (!meta) binAskMeta(f);
+  const W = 124.8, D = 42 * p.d + 7.2;
+  const box = glowSlotsBox(q, update, meta && meta.nofit, tr("Wkład na głowice – całe pudełko S{d}", { d: p.d }),
+    tr("Wkład {w} × {g} mm leży na dnie pudełka zamiast płyty gridfinity. Głowice czubkiem do przodu, przed czubkiem napis. W S4 mieści się 12 standardowych albo 14 indukcyjnych.",
+      { w: num0(W), g: num0(D) }), GLOW_WKLAD_VER);
+  if (meta) box.append(el("p", { class: "hint" }, tr("≈ {time} druku · ≈ {mass} filamentu", { time: fmtTime((PRINT.model.t[0] * meta.cm3 + PRINT.model.t[1] * meta.cm2) * state.speed),
+    mass: fmtG(PRINT.model.g[0] * meta.cm3 + PRINT.model.g[1] * meta.cm2) })));
+  box.append(el("div", { class: "row" }, el("button", { class: "small", onclick: ev => { ev.preventDefault();
+    binPost("/api/pojemnik/stl", p, p.styl_napisu !== "wklesly" && p.glowice.some(x => x.t.trim()) ? null : binName(p) + ".stl"); } }, tr("Pobierz STL")),
+    el("button", { class: "small", onclick: ev => { ev.preventDefault(); GLOW.open = ""; update(); } }, tr("Gotowe"))));
+  return box;
+}
+const num0 = v => (Math.round(v * 10) / 10).toLocaleString(typeof locale === "function" ? locale() : undefined);
+function glowCopyLayouts(from, to) {
+  if (!state.glowWkl || typeof state.glowWkl !== "object") return;
+  for (const [k, s] of Object.entries(state.glowWkl)) if (k.startsWith(from)) state.glowWkl[to + k.slice(from.length)] = JSON.parse(JSON.stringify(s));
 }
 
 // napisy na półkach wybranego pojemnika: styl, kolor liter (wspólny z etykietami), napis i symbol każdej przegródki

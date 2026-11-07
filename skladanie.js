@@ -4,7 +4,7 @@
 // Części liczą te same funkcje co lista części (addBase, addDrawerModule, addDrawer, addSustainer, addRoof, addLayerMods,
 // addHandleStatic, addHandlePull z index.html) z ilością 1, więc kroki zgadzają się z listą części. Etykieta z napisem
 // przypisana do frontu (labForFront) zastępuje pustą, pojemniki – liczba z układu tej szuflady, front z logo (logo.js) –
-// ten sam co na liście części.
+// ten sam co na liście części, wkład na głowice w szufladzie S – też.
 // Zrobione kroki: state.asmDone { "<id zestawu>|<krok>": true } – zapisywane z projektem.
 // Wczytywany po etykiety.js (labForFront, labPlain, labFileOf) i pojemniki.js (binKey, binInstances).
 
@@ -26,6 +26,13 @@ function asmBins(key, inst) {
   return n ? [tr("pojemniki gridfinity: {n} – układ w zakładce „Pojemniki gridfinity”", { n })] : [];
 }
 
+// wkład na głowice na całe pudełko S (pojemniki.js – glowParams) – jak na liście części
+function asmGlow(b, key, fam, d, ins) {
+  if (ins !== "glowice" || fam !== "S" || typeof glowParams !== "function") return;
+  const p = glowParams(key, d);
+  if (p.glowice.length || p.skarpety) b.addGen("Wkłady", tr("wkład na głowice Bambu Lab"), binFileOf(p), 1, p);
+}
+
 function asmSteps(st, inst) {
   normalizeStack(st);
   const d = st.depth, out = [];
@@ -45,7 +52,7 @@ function asmSteps(st, inst) {
         const key = binKey(st, l, ci, k);
         const what = tr("szuflada {fam}{d} {h}F", { fam, d, h }) + (c.pattern.length > 1 ? ", " + tr("szuflada {k} od góry", { k: k + 1 }) : "");
         step(key, nm + " · " + [what, side].filter(Boolean).join(", "),
-          b => { addDrawer(b, 1, fam, d, h, c.pattern.length > 1, c, k); asmLabel(b, key, "d"); if (typeof logoSwap === "function") logoSwap(b); }, asmBins(key, inst));
+          b => { addDrawer(b, 1, fam, d, h, c.pattern.length > 1, c, k); asmLabel(b, key, "d"); if (typeof logoSwap === "function") logoSwap(b); asmGlow(b, key, fam, d, insOf(c, k)); }, asmBins(key, inst));
       });
       else {
         const key = binKey(st, l, ci, 0);

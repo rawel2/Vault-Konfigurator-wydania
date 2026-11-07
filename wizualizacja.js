@@ -878,6 +878,13 @@ function vizStack(m, S, st, si, x0, P) {
               binVizParts(S, `i:${st.id}:${l.id}:${ci}:${k}`, { typ: "d", fam: fams[ci], d, h, plyta: ins }, (ca + cb) / 2, fy0 + BOX_UP + DNO,
                 fw === "xl" ? (bl ? -bl[2] / 2 : null) : -4.9 - (42 * d + 8) / 2, off(bxf), binsOn(P.box, insertCol));
             }
+            // wkład na głowice na całe pudełko S (pojemniki.js – glowParams): na dnie, ścianki boczne 4,2 mm, przednia 6,6, tylna 3,
+            // luz 0,5 mm; w pliku X – szerokość, Y+ – tył, Z – wysokość (CF.gdA0)
+            if (ins === "glowice" && S.V.stl && typeof glowParams === "function" && SERVER.ok && (SERVER.pojemnikiWer || 1) >= GLOW_WKLAD_VER) {
+              const p = glowParams(`i:${st.id}:${l.id}:${ci}:${k}`, d), fy = fy0 + BOX_UP + DNO;
+              if (p.glowice.length || p.skarpety)
+                stl(vizStlGetGen(binFileOf(p), p), CF.gdA0, [bxr.lo[0] + 4.7, fy, bxr.lo[2] + 3.5], [bxr.hi[0] - 4.7, fy + 13.2, bxr.hi[2] - 7.1], binsOn(P.box, insertCol), bxf);
+            }
             // przegródki Grid Dividers z układu tej szuflady (przegrodki.js) w otworach dna: kolumna 0 – 4,2 mm (ścianka boczna)
             // + GD_SIDE od lewego boku pudełka, rząd 0 (przód) – 17,65 mm (ścianka 6,6 + 11,05) od przedniej krawędzi pudełka
             // (pomiar plików 2026-11-05; XL przez analogię); stoją na dnie (3 mm nad spodem pudełka), w kolorze przegródek (domyślnie
@@ -889,6 +896,15 @@ function vizStack(m, S, st, si, x0, P) {
                 const X = u => bxr.lo[0] + 4.2 + (GD_SIDE[fams[ci]] || 5.19) + u * P0, Z = v => bxr.hi[2] - 17.65 - v * P0;
                 for (const p of G.parts) {
                   let a, b, cfg;
+                  if (p.kind === "post") {  // słupek (luki.py): podstawa 12 mm z gniazdami pinów, trzon z kopułką; bez siatki – bryły poglądowe
+                    const q = p.gen, B = p.half, cx = X(p.c[0]), cz = Z(p.c[1]);
+                    if (!(gdPostOk() && stl(vizStlGetGen(p.file, q), CF.gdA0, [cx - B, fy, cz - B], [cx + B, fy + q.h, cz + B], P.divs, bxf))) {
+                      const hb = q.piny === 1 ? 3 : 7;
+                      if (q.piny === 1) m.cyl([cx, fy + hb / 2, cz], 1, B, hb, P.divs, bxf, 24); else m.box([cx - B, fy, cz - B], [cx + B, fy + hb, cz + B], P.divs, bxf);
+                      m.cyl([cx, fy + hb + (q.h - hb) / 2, cz], 1, q.d / 4 + 1.25, q.h - hb, P.divs, bxf, 24);
+                    }
+                    continue;
+                  }
                   if (p.kind === "short") {  // krótka przegródka (luki.py): plik X – długość od początku, przedłużenie e0/e1 do ścianki
                     if (p.o === "h") stl(vizStlGetGen(p.file, p.gen), CF.gdH, [X(p.u0) - p.e0, fy, Z(p.a) - 12.7], [X(p.u1) + p.e1, yh, Z(p.a) + 12.7], P.divs, bxf);
                     else stl(vizStlGetGen(p.file, p.gen), CF.gdVr, [X(p.a) - 12.7, fy, Z(p.u1) - p.e1], [X(p.a) + 12.7, yh, Z(p.u0) + p.e0], P.divs, bxf);
