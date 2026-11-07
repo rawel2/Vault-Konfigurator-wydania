@@ -75,7 +75,7 @@ label { white-space: nowrap; }
 .col .fam { font-weight: 600; margin-bottom: 4px; }
 .col .row { margin-bottom: 4px; gap: 6px; }
 .preview { position: relative; display: flex; flex-direction: column-reverse; align-items: center; gap: 9px; padding: 18px 10px 10px; background: var(--chip); border-radius: 8px; margin-bottom: 10px; }
-.viz-open { position: absolute; top: 6px; right: 6px; }
+.viz-open { position: absolute; top: 6px; right: 6px; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
 /* okno pierwszego uruchomienia: folder z plikami STL */
 .setup-overlay { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px;
   background: color-mix(in srgb, var(--bg) 75%, transparent); backdrop-filter: blur(2px); }
@@ -92,6 +92,26 @@ label { white-space: nowrap; }
 .viz-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, var(--panel), var(--bg) 75%); }
 .viz-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
 .viz-labels { position: absolute; inset: 0; pointer-events: none; }
+/* okno 3D obok edytora: panel z prawej w miejscu kolumny wyniku (zgłoszenie użytkownika 2026-11-07: edytor zwężał się
+   niepotrzebnie) – edytor ok. 640 px (+ lewy pasek), resztę bierze panel; wynik wraca po zamknięciu widoku 3D;
+   na wąskim ekranie – dolna połowa, wynik zostaje */
+.viz-overlay.dock { inset: 0 0 0 auto; width: var(--dockw); border-left: 1px solid var(--line); box-shadow: -6px 0 24px rgba(0,0,0,.18); }
+body.viz-docked { --dockw: max(420px, calc(100vw - 920px)); padding-right: var(--dockw); }
+body.viz-docked:has(main.side-off) { --dockw: max(420px, calc(100vw - 740px)); }
+@media (min-width: 901px) {
+  body.viz-docked main { grid-template-columns: 220px minmax(0, 1fr); }
+  body.viz-docked main.side-off { grid-template-columns: 38px minmax(0, 1fr); }
+  body.viz-docked #resultCard { display: none; }
+}
+@media (max-width: 900px) {
+  .viz-overlay.dock { inset: auto 0 0 0; width: auto; height: 52vh; border-left: 0; border-top: 1px solid var(--line); }
+  body.viz-docked { padding-right: 0; padding-bottom: 52vh; --dockw: auto; }
+}
+.viz-paint { position: absolute; z-index: 5; width: 262px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25); display: grid; gap: 6px; }
+.viz-paint .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.viz-paint-sw { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+.viz-paint-sw .sw { width: 22px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.viz-paint-sw .sw.on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .viz-label { position: absolute; transform: translate(-50%, -50%); padding: 1px 6px; font-size: 12px; white-space: nowrap; color: var(--ink);
   background: color-mix(in srgb, var(--panel) 85%, transparent); border: 1px solid var(--line); border-radius: 4px; }
 .viz-label.layer { transform: translate(-100%, -50%); }
@@ -115,6 +135,13 @@ label { white-space: nowrap; }
 .tabs .tab-sep { width: 1px; align-self: stretch; margin: 2px 4px; background: var(--line); }
 .tabs button.tab-final:not(.on) { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .tabs button.tab-final::after { content: " ›"; }
+/* zakres zakładek: przełącznik dwóch przycisków nad zakładkami */
+.scope { display: flex; flex-wrap: wrap; align-items: center; gap: 0; margin-bottom: 10px; }
+.scope .lbl { margin-right: 8px; color: var(--muted); font-size: 13px; }
+.scope button { border-radius: 0; margin: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope button:first-of-type { border-radius: 6px 0 0 6px; }
+.scope button:last-of-type { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.scope button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* „Następny krok” na dole zakładek */
 .next-steps { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .next-steps .lbl { color: var(--muted); font-size: 12px; }
@@ -227,6 +254,12 @@ tr.grp td { background: var(--chip); font-weight: 600; }
 .bin-row { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; }
 .bin-row input { width: 70px; }
 .bin-row select { min-width: 0; flex: 0 1 auto; }  /* długie opcje (styl napisu) zwężają się na telefonie */
+/* gniazdo na głowicę: numer, rodzaj, napis i ✕ w jednej linii – rodzaj się zwęża (wąska lewa kolumna) */
+.glow-row { flex-wrap: nowrap; gap: 6px; margin-bottom: 4px; }
+.glow-row select { flex: 1 1 auto; min-width: 0; }
+.glow-row input { flex: 0 0 64px; width: 64px !important; }
+/* styl i kolor napisu: przy długiej opcji pole wyboru schodzi pod nazwę zamiast się ucinać */
+.bin-nap-box .bin-row { flex-wrap: wrap; }
 .bin-view { position: relative; min-width: 0; }
 .bin-canvas { width: 100%; height: 380px; display: block; cursor: grab; touch-action: none; border-radius: 6px;
   background: radial-gradient(ellipse at 50% 30%, var(--panel), var(--bg) 75%); }
@@ -317,6 +350,14 @@ kbd { display: inline-block; padding: 0 5px; border: 1px solid var(--line); bord
 .wiz-main { display: grid; grid-template-columns: 1fr 300px; gap: 16px; padding: 4px 16px 12px; overflow: auto; min-height: 0; }
 @media (max-width: 760px) { .wiz-main { grid-template-columns: 1fr; } }
 .wiz-body h3:first-child { margin-top: 10px; }
+.wiz-labs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 12px; margin: 6px 0; }
+.wiz-lab { display: flex; flex-direction: column; gap: 2px; white-space: normal; }
+.wiz-lab input { width: 100%; }
+.wiz-pal { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; margin: 8px 0; }
+.wiz-palbtn { display: flex; align-items: center; gap: 8px; text-align: left; padding: 6px 8px; }
+.wiz-palbtn.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.wiz-sws { display: inline-flex; gap: 2px; min-width: 74px; }
+.wiz-sw { width: 13px; height: 18px; border: 1px solid var(--line); border-radius: 3px; }
 .wiz-side { align-self: start; position: sticky; top: 0; padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .wiz-side .preview { margin: 0; }
 .wiz-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
@@ -442,7 +483,7 @@ td.est.geom { color: var(--muted); }
       <button id="btnDupStack" data-tr>Duplikuj</button>
       <button id="btnDelStack" data-tr>Usuń</button>
     </div>
-    <p class="hint" data-tr>Każdy zestaw to jedna wieża modułów o wspólnej głębokości. Wynik po prawej sumuje wszystkie zestawy razy ich ilość.</p>
+    <p class="hint" data-tr>Każdy zestaw to jedna wieża modułów o wspólnej głębokości. Wynik po prawej pokazuje wybrany zestaw albo – przełącznikiem nad zakładkami – cały projekt, razy ilość zestawów.</p>
     <h3 data-tr>Dodatkowe pliki</h3>
     <p class="hint" data-tr>Np. podpory ręczne (Manual Supports), zapasowe części.</p>
     <input type="search" id="extraSearch" data-tr-placeholder="szukaj pliku…" style="width:100%">
@@ -452,7 +493,9 @@ td.est.geom { color: var(--muted); }
 
   <section class="card" id="editor"></section>
 
-  <section class="card">
+  <section class="card" id="resultCard">
+    <!-- zakres zakładek: wybrany zestaw albo cały projekt (od 2026-11-07, tylko przy kilku zestawach) -->
+    <div class="scope" id="scopeBar" hidden></div>
     <!-- zakładki w kolejności pracy (od 2026-11-03): listy części → dodatki (pojemniki, etykiety) → przygotowanie wydruku -->
     <div class="tabs">
       <button data-tab="print" class="on" data-tr-title="Pliki STL do wydrukowania – ilości, czas, filament, licznik wydrukowanych" data-tr>Do druku</button>
@@ -479,7 +522,7 @@ td.est.geom { color: var(--muted); }
   <a href="https://github.com/rawel2/Vault-Konfigurator-wydania/releases/latest" target="_blank" rel="noopener" data-tr>Instrukcja i aktualizacje</a>
 </footer>
 
-<script>window.VAULT_WEB = {"wersja": "1.1.40", "commit": "c5b57ed"};</script>
+<script>window.VAULT_WEB = {"wersja": "1.1.41", "commit": "4766283"};</script>
 <script>
   // pliki z danymi zmieniają się po skanowaniu – wczytuj je zawsze świeże (bez pamięci podręcznej przeglądarki)
   for (const f of ["katalog.js", "dane_druku.js", "drukarki.js", "tlumaczenia.js"])
@@ -487,6 +530,8 @@ td.est.geom { color: var(--muted); }
 </script>
 <!-- wizualizacja 3D: same funkcje, globalne z poniższego skryptu są używane dopiero przy otwarciu okna -->
 <script src="wizualizacja.js"></script>
+<!-- kolory filamentów Bambu Lab poza PLA Basic (generowany: tools/filamenty_bambu.py) -->
+<script src="filamenty.js"></script>
 <!-- pojemniki gridfinity: formularz i podgląd (renderer z wizualizacja.js, bryły liczy serwer – pojemniki.py) -->
 <script src="pojemniki.js"></script>
 <script src="przegrodki.js"></script>
@@ -710,14 +755,17 @@ function load() {
 function save() {
   try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* tryb prywatny */ }
   histRecord();
+  vizLive();
 }
+// otwarte okno 3D (także „Obok edytora”) przebudowuje scenę po każdej zmianie projektu
+const vizLive = () => { if (typeof VIZ !== "undefined" && VIZ && VIZ.refresh) VIZ.refresh(); };
 
 // ---------- Cofnij / Ponów ----------
 // Historia projektu (od 2026-11-03, praca nad spójnością interfejsu – przy tylu opcjach usunięcie warstwy czy układu
 // pojemników jednym kliknięciem było nieodwracalne): każdy zapis porównuje projekt bez ustawień widoku (UI_KEYS) z
 // poprzednim; zmiany w odstępie < 700 ms (pisanie, przeciąganie) łączą się w jeden krok. Cofnięcie podmienia projekt,
 // ustawienia widoku (zakładka, język, okno 3D…) zostają. Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) poza polami tekstowymi.
-const UI_KEYS = ["tab", "lang", "theme", "sideOff", "news", "viz", "binCur", "gdCur", "labelCur", "current", "welcomeOff"];
+const UI_KEYS = ["tab", "lang", "theme", "sideOff", "news", "viz", "binCur", "gdCur", "labelCur", "current", "welcomeOff", "scope"];
 const HIST = { undo: [], redo: [], last: null, t: 0, MAX: 80 };
 function projJson() {
   return JSON.stringify(state, function (k, v) { return this === state && UI_KEYS.includes(k) ? undefined : v; });
@@ -761,8 +809,9 @@ function histButtons() {
 function toast(msg, withUndo = true) {
   let t = document.getElementById("toast");
   if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.append(t); }
-  t.replaceChildren(el("span", {}, msg), withUndo && HIST.undo.length
-    ? el("button", { class: "small", onclick: () => { undo(); t.hidden = true; } }, tr("Cofnij")) : null);
+  // bez przycisku – bez null (replaceChildren wstawiłby tekst „null”)
+  t.replaceChildren(...[el("span", {}, msg), withUndo && HIST.undo.length
+    ? el("button", { class: "small", onclick: () => { undo(); t.hidden = true; } }, tr("Cofnij")) : null].filter(Boolean));
   t.hidden = false;
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => { t.hidden = true; }, 7000);
@@ -778,6 +827,21 @@ function fixIds() {
   state.current = Math.min(state.current, state.stacks.length - 1);
 }
 const cur = () => state.stacks[state.current];
+// zakres zakładek z wynikiem (prośba użytkownika 2026-11-07: „wszystkie operacje powinny dotyczyć wybranego zestawu”):
+// state.scope "set" – wybrany zestaw (domyślnie), "all" – cały projekt; przy jednym zestawie bez różnicy. Kolory części
+// i licznik wydrukowanych zostają wspólne (decyzja użytkownika).
+const scopeAll = () => state.scope === "all" || state.stacks.length < 2;
+const scopeStacks = () => scopeAll() ? state.stacks : [cur()];
+// element zestawu: klucz egzemplarza „i:<id zestawu>:…” albo pole st (dodatkowy plik, własny układ pojemników, etykieta bez
+// frontu – dodane w widoku zestawu); bez przypisania (starsze projekty, usunięty zestaw) – tylko w „Całym projekcie”
+const stackOfKey = k => { const m = /^i:(\d+):/.exec(k || ""); return m ? +m[1] : null; };
+function inScope(key, st) {
+  if (scopeAll()) return true;
+  const id = stackOfKey(key) ?? (st ?? null);
+  return id !== null && id === cur().id;
+}
+// pole st dla nowego elementu dodanego w widoku zestawu
+const scopeTag = () => scopeAll() ? {} : { st: cur().id };
 
 // Pilnuje, by warstwy były zgodne z regułami po każdej zmianie
 function normalizeStack(st) {
@@ -1177,9 +1241,12 @@ function addStack(b, st) {
   addHandlePull(b, st, m);
 }
 
-function buildBom() {
-  const b = new Bom();
-  state.stacks.forEach(st => { normalizeStack(st); addStack(b, st); });
+// full – cały projekt bez względu na przełącznik zakresu (np. wspólny rozmiar logo)
+function buildBom(full = false) {
+  const b = new Bom(), was = state.scope;
+  if (full) state.scope = "all";
+  try {
+  scopeStacks().forEach(st => { normalizeStack(st); addStack(b, st); });
   // Hidden Key Part 2 to wyjmowana rączka pasująca do wszystkich ukrytych zamków (pomiar plików 2026-11-03: belka w gnieździe
   // cz. 1, cz. 2 ją obejmuje) – jedna sztuka na projekt, gdy zaznaczone „drukuj klucz” (prośba użytkownika; do tej pory 1 na szufladę)
   // przyrząd do tulei kół to narzędzie – jeden na cały projekt (2026-11-05; do tej pory jeden na zestaw z kołami)
@@ -1188,6 +1255,7 @@ function buildBom() {
   if (state.key === "hidden" && state.keyPrint !== false && [...b.parts.keys()].some(f => /hidden key \(turn on supports\)\.stl$/.test(norm(f))))
     b.add("Szuflady", "ukryty kluczyk cz. 2", R`^01\. drawers/07\. universal/hidden key part 2 \(turn on supports\)\.stl$`, 1, { note: "drukować z podporami" });
   for (const e of state.extras) {
+    if (!inScope(null, e.st)) continue;
     const n = norm(e.file);
     b.add("Dodatkowe", e.file.split("/").pop(), new RegExp("^" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$"), e.qty, { raw: true });
   }
@@ -1200,6 +1268,7 @@ function buildBom() {
   // z projektem): bez pustych etykiet szuflad i skrzynek; etykiety z napisem (@etykiety/) zostają
   if (state.blankLabels === false)
     for (const f of [...b.parts.keys()]) if (/^01\. drawers\/07\. universal\/label\.stl$|^02\. sustainers\/05\. universal\/label for sustainers\.stl$/.test(norm(f))) b.parts.delete(f);
+  } finally { state.scope = was; }
   return b;
 }
 
@@ -1288,7 +1357,10 @@ function renderPreview(st) {
   const top = st.layers[st.layers.length - 1];
   if (top && top.type === "D" && st.roof !== "none") box.append(el("div", { class: "pv-roof", style: `width:${WIDTH_MM[baseWidth(st)] * scale}px` }));
   // pełny widok 3D w osobnym oknie (wizualizacja.js)
-  if (typeof openViz === "function") box.append(el("button", { class: "small viz-open", onclick: () => openViz() }, tr("Wizualizacja 3D")));
+  // pełny widok 3D w osobnym oknie albo panel obok edytora (prośba użytkownika 2026-11-07: drugi przycisk pod pierwszym)
+  if (typeof openViz === "function") box.append(el("div", { class: "viz-open" },
+    el("button", { class: "small", onclick: () => openViz(false) }, tr("Wizualizacja 3D")),
+    el("button", { class: "small", title: tr("Okno 3D obok edytora – zmiany w projekcie widać od razu"), onclick: () => openViz(true) }, tr("Obok edytora"))));
   return box;
 }
 
@@ -1465,10 +1537,13 @@ function renderEditor() {
 // ---------- Dodatkowe pliki ----------
 function renderExtras() {
   const box = $("extrasList"); box.replaceChildren();
-  state.extras.forEach((e, i) => box.append(el("div", { class: "row" },
+  // tylko pliki wybranego zestawu (zakres zakładek); pozostałe – licznik pod listą
+  const hidden = state.extras.filter(e => !inScope(null, e.st)).length;
+  state.extras.forEach((e, i) => inScope(null, e.st) && box.append(el("div", { class: "row" },
     num(e.qty, v => { e.qty = v; update(); }, 1),
     el("span", { title: e.file, style: "flex:1;font-size:12px" }, e.file.split("/").slice(-2).join(" / ")),
     el("button", { class: "small", title: tr("usuń"), onclick: () => { histBreak(); state.extras.splice(i, 1); update(); toast(tr("Usunięto plik z listy")); } }, "✕"))));
+  if (hidden) box.append(el("p", { class: "hint" }, tr("Pliki innych zestawów i całego projektu: {n} – widać je w zakresie „Cały projekt”.", { n: hidden })));
 }
 $("extraSearch").addEventListener("input", e => {
   const q = e.target.value.trim().toLowerCase().split(/\s+/).filter(Boolean), res = $("extraResults");
@@ -1479,8 +1554,8 @@ $("extraSearch").addEventListener("input", e => {
   if (!hits.length) res.append(el("div", {}, tr("brak wyników")));
   for (const h of hits) res.append(el("div", {}, el("span", { title: h.p }, h.p.split("/").slice(-2).join(" / ")),
     el("button", { class: "small", onclick: () => {
-      const ex = state.extras.find(x => x.file === h.p);
-      if (ex) ex.qty++; else state.extras.push({ file: h.p, qty: 1 });
+      const ex = state.extras.find(x => x.file === h.p && inScope(null, x.st));
+      if (ex) ex.qty++; else state.extras.push({ file: h.p, qty: 1, ...scopeTag() });
       update();
     } }, "+")));
 });
@@ -1536,7 +1611,20 @@ function filamentBox(parts) {
       (s.left < s.g - 0.5 ? " · " + tr("zostało ≈ {mass}", { mass: fmtG(s.left) }) : ""));
   }));
 }
+// przełącznik zakresu zakładek (tylko przy kilku zestawach)
+function renderScope() {
+  const bar = $("scopeBar"), many = state.stacks.length > 1;
+  bar.hidden = !many;
+  if (!many) return bar.replaceChildren();  // bez starych napisów (np. w poprzednim języku)
+  const set = v => { state.scope = v; save(); render(); };
+  bar.replaceChildren(el("span", { class: "lbl" }, tr("Zakładki pokazują:")),
+    el("button", { class: scopeAll() ? "" : "on", "aria-pressed": String(!scopeAll()), title: tr("Listy części, pojemniki, przegródki, etykiety, wydruk i składanie tylko dla zestawu zaznaczonego po lewej"),
+      onclick: () => set("set") }, cur().name),
+    el("button", { class: scopeAll() ? "on" : "", "aria-pressed": String(scopeAll()), title: tr("Wszystkie zestawy razem – np. jedno zlecenie druku dla kilku wież"),
+      onclick: () => set("all") }, tr("Cały projekt (zestawy: {n})", { n: state.stacks.length })));
+}
 function renderResult() {
+  renderScope();
   const b = buildBom(), box = $("result");
   const parts = sortedParts(b), hw = [...b.hw.values()].sort((a, c) => a.name.localeCompare(c.name, LANG));
   const pieces = parts.reduce((n, e) => n + e.qty, 0), missing = parts.filter(e => e.missing).length;
@@ -1671,7 +1759,22 @@ function projectIssues(parts) {
       const tall = t ? s.items.filter(it => binInside(it, binTargetFix(t)) && it.p && it.p.h > binMaxH(binTargetFix(t), it.p.rant)).length : 0;
       if (tall && !s.off) out.push({ msg: tr("Pojemniki wyższe niż miejsce w szufladzie albo skrzynce: {n} (zakładka „Pojemniki gridfinity”).", { n: tall }),
         go: () => { state.tab = "bins"; state.binCur = s.key; update(); } });
+      // pojemniki na głowice z gniazdami, które się nie mieszczą (meta z serwera – brakująca dociągana w tle)
+      if (typeof binIsGlow === "function") s.items.forEach((it, i) => {
+        if (!it.p || !binIsGlow(it.p)) return;
+        const f = binFileOf(binFull(it)), m = BIN_META.get(f), nf = m && m.nofit;
+        if (!m) binAskMeta(f);
+        if (nf && (nf[0] || nf[1])) out.push({ msg: tr("Pojemnik na głowice: nie mieści się głowic {g}, skarpet {s} (zakładka „Pojemniki gridfinity”).", { g: nf[0], s: nf[1] }),
+          go: () => { state.tab = "bins"; state.binCur = s.key; BIN.sel = i; update(); } });
+      });
     }
+  }
+  // wkład na głowice na całe pudełko S – to samo
+  if (typeof glowInstances === "function") for (const g of glowInstances()) {
+    const f = binFileOf(glowParams(g.key, g.d)), m = BIN_META.get(f), nf = m && m.nofit;
+    if (!m) binAskMeta(f);
+    if (nf && (nf[0] || nf[1])) out.push({ msg: tr("Wkład na głowice ({where}): nie mieści się głowic {g}, skarpet {s}.", { where: g.label, g: nf[0], s: nf[1] }),
+      go: () => { GLOW.open = g.key; update(); } });
   }
   if (typeof gdIssues === "function") out.push(...gdIssues());
   const lab = typeof labMismatch === "function" && labMismatch();
@@ -1728,7 +1831,7 @@ function csvText() {
     rows.push([tr("Niedrukowane"), "", e.qty, e.name, "", [...e.notes].join(", "), ""]);
   rows.push([]);
   rows.push([tr("Zestawy")]);
-  for (const st of state.stacks) rows.push(["", st.name, st.qty, `${baseWidth(st)}${st.depth}`, st.layers.map(l => layoutLabel(l.layout) + " " + l.height + "F " + (l.type === "D" ? tr("szuflady") : tr("skrzynki"))).join(" | ")]);
+  for (const st of scopeStacks()) rows.push(["", st.name, st.qty, `${baseWidth(st)}${st.depth}`, st.layers.map(l => layoutLabel(l.layout) + " " + l.height + "F " + (l.type === "D" ? tr("szuflady") : tr("skrzynki"))).join(" | ")]);
   return rows.map(r => r.map(csvCell).join(csvSep())).join("\r\n");
 }
 function exportCsv() {
@@ -1747,7 +1850,7 @@ const printerLabel = p => {
   const [x0, y0, x1, y1] = symArea(p), r = n => +n.toFixed(1);
   return `${p.name.includes(" – ") ? tr(p.name) : p.name} (${r(x1 - x0)}×${r(y1 - y0)}×${p.h})`;
 };
-const defaultJobName = () => (state.stacks.length === 1 ? state.stacks[0].name : state.stacks.map(s => s.name).join(" + ")).slice(0, 60);
+const defaultJobName = () => (scopeStacks().length === 1 ? scopeStacks()[0].name : scopeStacks().map(s => s.name).join(" + ")).slice(0, 60);
 const SERVER = { checked: false, ok: false, status: null, timer: null };
 
 async function api(path, body) {
@@ -1843,7 +1946,15 @@ function renderUpdate() {
 }
 // Komunikaty startowe (nowości) z „nie pokazuj więcej” – zamknięte na stałe trafiają do state.news, zamknięte
 // bez haczyka wracają przy następnym uruchomieniu. Nowy komunikat = nowy wpis w NEWS z własnym id.
+// komunikaty startowe: pierwszy niezamknięty; `when` – czy pokazać teraz, `action` – przycisk zamiast odnośnika
 const NEWS = [{
+  // dla dotychczasowych użytkowników (2026-11-07) – nowi widzą kartę powitalną z kreatorem, więc przy nietkniętym projekcie nie
+  id: "kreator-2026-11",
+  title: () => tr("Kreator wieży"),
+  text: () => tr("Nową wieżę złożysz krok po kroku: szablon, rozmiar, warstwy od spodu, dach i dodatki, podsumowanie z czasem druku. Są szablony z płytą gridfinity i z wkładem na głowice Bambu Lab. Kreator dodaje zestaw do projektu – Ctrl+Z go cofa."),
+  when: () => !(state.stacks.length === 1 && typeof krPristine === "function" && krPristine(cur())),
+  action: () => [tr("Otwórz kreator"), () => openWizard()],
+}, {
   id: "stl-repair-2026-10",
   title: () => tr("Nowe narzędzie: naprawa siatek STL"),
   text: () => tr("Bambu Studio proponuje naprawę plików VAULT przy każdym wczytaniu. napraw_stl.bat w folderze programu naprawia całą bibliotekę za jednym razem tą samą usługą Windows i zapisuje jej naprawioną kopię, którą wskazujesz potem jako bibliotekę."),
@@ -1862,13 +1973,14 @@ function renderNews() {
     return;
   }
   const hidden = new Set(Array.isArray(state.news) ? state.news : []);
-  const n = NEWS.find(x => !hidden.has(x.id) && !NEWS_CLOSED.has(x.id));
+  const n = NEWS.find(x => !hidden.has(x.id) && !NEWS_CLOSED.has(x.id) && (!x.when || x.when()));
   if (!n) { box.replaceChildren(); return; }
   const chk = el("input", { type: "checkbox" });
   box.replaceChildren(el("div", { class: "upd" },
     el("b", {}, n.title()),
     el("span", {}, n.text()),
-    el("a", { href: n.url, target: "_blank", rel: "noopener" }, tr("Opis i narzędzie na GitHubie")),
+    n.action ? (([t, run]) => el("button", { class: "small", onclick: run }, t))(n.action())
+      : el("a", { href: n.url, target: "_blank", rel: "noopener" }, tr("Opis i narzędzie na GitHubie")),
     el("label", {}, chk, " ", tr("nie pokazuj więcej")),
     el("button", { class: "small", onclick: () => {
       if (chk.checked) { state.news = [...hidden, n.id]; save(); }
@@ -1957,6 +2069,7 @@ function pollJob() {
     // albo innego projektu z serwera nie jest zapisywany)
     if (st.kind === "druk" && !st.running && SERVER.myJob) { SERVER.myJob = false; if (st.result) recordPlates(st.result); }
     if (state.tab === "job") renderResult();
+    if (typeof krRefresh === "function") krRefresh();  // kreator – krok „Wydruk” pokazuje postęp zadania
     renderLibrary();
     if (st.running) pollJob();
   }, 700);
@@ -2107,22 +2220,44 @@ const COLOR_PALETTE = [
   ["#0056B8", "kobaltowy"], ["#0A2989", "niebieski"], ["#5B6579", "niebieskoszary"], ["#5E43B7", "fioletowy"], ["#482960", "indygo"],
 ];
 const colorGroup = file => file.startsWith("@etykiety/") ? "etykiety" : (COLOR_GROUPS.find(([, , rx]) => rx.test(norm(file))) || COLOR_GROUPS[COLOR_GROUPS.length - 1])[0];
-const colorName = hex => { const p = COLOR_PALETTE.find(([h]) => h.toLowerCase() === (hex || "").toLowerCase()); return p ? tr(p[1]) : (hex || "").replace("#", ""); };
+// linie filamentów Bambu Lab (zgłoszenie nr 9, 2026-11-07): PLA Basic – COLOR_PALETTE, pozostałe – FILAMENTS z filamenty.js;
+// state.filLine – linia, z której wybiera się kolory części (opony – zawsze TPU). Kolor części to dalej sam kod #RRGGBB.
+const FIL = () => typeof FILAMENTS !== "undefined" ? FILAMENTS : {};
+const FIL_TPU = "TPU 95A HF";
+const filLines = () => ["PLA Basic", ...Object.keys(FIL())];
+const filLine = () => FIL()[state.filLine] ? state.filLine : "PLA Basic";
+const filColors = (line = filLine()) => FIL()[line] ? FIL()[line].map(([h, n]) => [h, n[LANG] || n.en]) : COLOR_PALETTE.map(([h, n]) => [h, tr(n)]);
+// nazwa koloru: najpierw z wybranej linii, potem PLA Basic, potem z pozostałych linii; brak – kod bez „#”
+const colorName = hex => {
+  const x = (hex || "").toLowerCase(), find = line => (filColors(line).find(([h]) => h.toLowerCase() === x) || [])[1];
+  for (const line of [filLine(), "PLA Basic", ...Object.keys(FIL())]) { const n = find(line); if (n) return n; }
+  return (hex || "").replace("#", "");
+};
+// pole wyboru koloru: kolory linii i bieżący spoza niej (nazwa z innej linii albo „własny”)
+const filOpts = (cur, line) => {
+  const o = filColors(line);
+  if (cur && !o.some(([h]) => h.toLowerCase() === cur.toLowerCase())) { const n = colorName(cur); o.push([cur, n === cur.replace("#", "") ? tr("własny {hex}", { hex: cur }) : n]); }
+  return o;
+};
 const partColor = file => { const c = state.colors || {}, g = colorGroup(file); return c[g] || (g === "przegrodki" && c.pojemniki) || ""; };
 // „Wklej kolory z widoku 3D” (prośba użytkownika 2026-11-05): okno 3D koloruje części tymi samymi grupami (vizGroupColors),
 // więc każda grupa dostaje dokładnie kolor z okna. Każdy kolor zamieniony na najbliższy filament z COLOR_PALETTE (palety
 // okna 3D są z nich złożone), daleki – zostaje własny.
-function pasteVizColors() {
-  const V = Object.assign({}, VIZ_PALETTES.ussa, state.viz || {});
-  if (V.palette === "druk") { toast(tr("Okno 3D pokazuje już kolory części z wydruku"), false); return; }
+// kolory grup wydruku z ustawień okna 3D V (też kreator – krok „Kolory”)
+function vizColorsFor(V) {
   const rgb = h => [1, 3, 5].map(i => parseInt(String(h).slice(i, i + 2), 16) || 0), dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
   const snap = h => {
     if (!/^#[0-9a-f]{6}$/i.test(String(h))) return null;
     const best = COLOR_PALETTE.map(([p]) => [p, dist(rgb(p), rgb(h))]).sort((a, b) => a[1] - b[1])[0];
     return best[1] < 60 ? best[0] : String(h).toUpperCase();
   };
+  return Object.fromEntries(Object.entries(vizGroupColors(V)).map(([k, v]) => [k, snap(v)]).filter(([, v]) => v));
+}
+function pasteVizColors() {
+  const V = Object.assign({}, VIZ_PALETTES.ussa, state.viz || {});
+  if (V.palette === "druk") { toast(tr("Okno 3D pokazuje już kolory części z wydruku"), false); return; }
   histBreak();
-  state.colors = Object.fromEntries(Object.entries(vizGroupColors(V)).map(([k, v]) => [k, snap(v)]).filter(([, v]) => v));
+  state.colors = vizColorsFor(V);
   save(); renderResult();
   toast(tr("Wklejono kolory z widoku 3D"));
 }
@@ -2134,8 +2269,7 @@ function renderColors(parts) {
     const set = v => { if (v) state.colors[k] = v; else delete state.colors[k]; save(); renderResult(); };
     // przegródki bez własnego koloru – jak pojemniki gridfinity (partColor)
     const jak = k === "przegrodki" && state.colors.pojemniki;
-    const opts = [["", k === "przegrodki" ? tr("jak pojemniki gridfinity") : tr("bez koloru (jak inne)")], ...COLOR_PALETTE.map(([h, n]) => [h, tr(n)])];
-    if (cur && !COLOR_PALETTE.some(([h]) => h.toLowerCase() === cur.toLowerCase())) opts.push([cur, tr("własny {hex}", { hex: cur })]);
+    const opts = [["", k === "przegrodki" ? tr("jak pojemniki gridfinity") : tr("bez koloru (jak inne)")], ...filOpts(cur, k === "opony" && FIL()[FIL_TPU] ? FIL_TPU : undefined)];
     return el("div", { class: "row" },
       el("span", { style: `display:inline-block;width:14px;height:14px;border:1px solid var(--line);border-radius:3px;background:${cur || jak || "transparent"}` }),
       el("span", { style: "flex:1;min-width:180px" }, tr(label)),
@@ -2145,7 +2279,9 @@ function renderColors(parts) {
   if (!rows.length) return null;
   return el("details", { open: Object.keys(state.colors).length > 0 },
     el("summary", {}, tr("Kolory części") + (Object.keys(state.colors).length ? ` (${Object.keys(state.colors).length})` : "")),
-    el("div", { class: "row" }, el("button", { class: "small", title: tr("Kolory z palety okna Wizualizacja 3D – każdy zamieniony na najbliższy filament PLA Basic z listy"),
+    el("div", { class: "row" }, el("label", {}, lab(tr("Filamenty Bambu Lab:"), tr("Linia filamentów, z której wybierasz kolory części (opony – TPU 95A HF). Nazwy i kolory jak w Bambu Studio; projekt slicera dostaje kolor, profil filamentu ustawiasz w slicerze.")), " ",
+        sel(filLine(), filLines().map(l => [l, l]), v => { state.filLine = v; save(); renderResult(); })),
+      el("button", { class: "small", title: tr("Kolory z palety okna Wizualizacja 3D – każdy zamieniony na najbliższy filament PLA Basic z listy"),
       onclick: pasteVizColors }, tr("Wklej kolory z widoku 3D"))),
     el("p", { class: "hint" }, tr("Części w różnych kolorach trafiają na osobne płyty, a kolor jest w nazwie płyty. Projekt Bambu Studio ma je jako kolejne filamenty, w innych slicerach każdy kolor to osobny projekt. Bez wybranych kolorów wszystko jak dotąd.")),
     ...rows);
@@ -2321,7 +2457,7 @@ document.addEventListener("keydown", e => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
   const k = e.key.toLowerCase(), t = e.target, tag = (t && t.tagName) || "";
   if (k !== "z" && k !== "y") return;
-  if (/^(INPUT|SELECT|TEXTAREA)$/.test(tag) || (t && t.isContentEditable) || document.querySelector(".viz-overlay")) return;
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(tag) || (t && t.isContentEditable) || document.querySelector(".viz-overlay:not(.dock)")) return;
   e.preventDefault();
   if (k === "y" || e.shiftKey) redo(); else undo();
 });
@@ -2383,6 +2519,7 @@ function render() {
   $("btnSide").textContent = state.sideOff ? "»" : "«";
   $("btnSide").title = tr(state.sideOff ? "Rozwiń panel" : "Zwiń panel");
   renderStacks(); renderEditor(); renderExtras(); renderResult(); renderLibrary(); renderDocs(); renderUpdate(); renderNews();
+  vizLive();
 }
 
 load();

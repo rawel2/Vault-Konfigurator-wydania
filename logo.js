@@ -56,7 +56,10 @@ function logoAddToBom(b) {
   const L = logoState();
   LOGO.cur = new Map();
   if (!L.on || logoEmpty(L) || !logoOk()) return;
-  const fronts = logoFronts([...b.parts.keys()]);
+  // wspólny rozmiar logo liczony z frontów całego projektu także w zakresie „wybrany zestaw” (decyzja użytkownika:
+  // „identyczne wymiary dla jednego projektu”); w b podmieniane tylko fronty, które w nim są
+  const fronts = logoFronts(scopeAll() ? [...b.parts.keys()]
+    : [...buildBom(true).parts.values()].map(e => e.gen && e.gen.typ === "front_logo" ? e.gen.front : e.file));
   if (!fronts.length) return;
   const r = logoPlace(fronts, L);
   if (r.status !== "ok" || !r.r.miejsce) return;
@@ -124,11 +127,11 @@ function logoPanel() {
   const styl = row(tr("styl"), sel(L.styl, [["wpuszczony", tr("wpuszczony – drugi filament równo z licem (AMS)")],
     ["wypukly", tr("wypukły – nad licem, zmiana filamentu pauzą")], ["wklesly", tr("wklęsły – wycięty w licu, jeden kolor")]], ch("styl")));
   const gl = row(L.styl === "wypukly" ? tr("wysokość") : tr("głębokość"), sel(String(+L.gl), ["0.4", "0.6", "0.8", "1"].map(h => [h, (+h).toLocaleString(locale()) + " mm"]), v => { L.gl = +v; rerender(); }));
-  const kolor = L.styl === "wklesly" ? null : row(tr("kolor logo (= kolor napisów)"), sel(state.labelTextColor || "#000000", COLOR_PALETTE.map(([h, n]) => [h, tr(n)]),
+  const kolor = L.styl === "wklesly" ? null : row(tr("kolor logo (= kolor napisów)"), sel(state.labelTextColor || "#000000", filOpts(state.labelTextColor || "#000000"),
     v => { state.labelTextColor = v; rerender(); }));
   // wynik: wspólne miejsce dla frontów projektu
   let info = null;
-  const fronts = logoFronts([...buildBom().parts.values()].map(e => e.gen && e.gen.typ === "front_logo" ? e.gen.front : e.file));
+  const fronts = logoFronts([...buildBom(true).parts.values()].map(e => e.gen && e.gen.typ === "front_logo" ? e.gen.front : e.file));
   if (!fronts.length) info = el("p", { class: "hint" }, tr("W projekcie nie ma frontów szuflad ani skrzynek."));
   else if (logoEmpty(L)) info = el("p", { class: "hint" }, tr("Wpisz napis albo wybierz ikonę lub plik SVG."));
   else {

@@ -26,7 +26,7 @@ const VIZ_PALETTES = {
 // Okno 3D koloruje każdą część kolorem jej grupy wydruku (index.html: COLOR_GROUPS, colorGroup) – 2026-11-05, zgłoszenie
 // użytkownika: paleta „beż + kakao” po „Wklej kolory z widoku 3D” nie dawała się wydrukować, bo okno 3D dzieliło części
 // inaczej niż „Przygotuj wydruk” (blokady, etykiety, kręgosłup, fronty skrzynek). Teraz jedna tabela: grupa wydruku → rola
-// palety. Role bez wartości: stop, label, dark, tyre – jak drobne; sust – jak fronty; lid, roof, mods – jak obudowa;
+// palety. Role bez wartości: stop, label, dark – jak drobne, tyre – czarny; sust – jak fronty; lid, roof, mods – jak obudowa;
 // insert / insertS – kolor palety najbardziej różny od pudełka / obudowy (wkład leży w pudełku szuflady / w module skrzynki).
 const VIZ_GROUP_ROLE = { moduly: "housing", fronty: "front", fronty_skrzynek: "sust", pudelka: "box", drobne: "lock",
   blokady: "stop", etykiety: "label", uchwyty: "dark", wieka: "lid", dachy: "roof", modyfikacje: "mods", opony: "tyre",
@@ -42,7 +42,8 @@ function vizGroupColors(V) {
   for (const k of VIZ_ROLES) r[k] = ok(V[k]);
   for (const k of ["housing", "front", "box", "lock", "bins"]) r[k] = r[k] || u[k];
   r.sust = r.sust || r.front;
-  for (const k of ["stop", "label", "dark", "tyre"]) r[k] = r[k] || r.lock;
+  for (const k of ["stop", "label", "dark"]) r[k] = r[k] || r.lock;
+  r.tyre = r.tyre || "#000000";  // opony z TPU – bez własnego koloru czarne (2026-11-07, wcześniej „do rozważenia” w CLAUDE.md)
   for (const k of ["lid", "roof", "mods"]) r[k] = r[k] || r.housing;
   const far = bg => [r.housing, r.front, r.sust, r.lock, r.box].reduce((a, c) =>
     Math.hypot(...vHex(c).map((v, i) => v - vHex(bg)[i])) > Math.hypot(...vHex(a).map((v, i) => v - vHex(bg)[i])) ? c : a);
@@ -203,7 +204,7 @@ function vizStlGet(file) {
   let e = VIZ_STL.map.get(file);
   if (e) return e;
   if (typeof WEB !== "undefined" && WEB) { e = { status: "error", fits: new Map() }; VIZ_STL.map.set(file, e); return e; }  // wersja online – bez serwera
-  e = { status: "loading", fits: new Map() };
+  e = { status: "loading", fits: new Map(), file };
   VIZ_STL.map.set(file, e);
   vizStlFetch(file, e).finally(() => VIZ_STL.onload && VIZ_STL.onload());
   return e;
@@ -214,7 +215,7 @@ function vizStlGet(file) {
 function vizStlGetGen(key, gen) {
   let e = VIZ_STL.map.get(key);
   if (e) return e;
-  e = { status: "loading", fits: new Map() };
+  e = { status: "loading", fits: new Map(), file: key };
   VIZ_STL.map.set(key, e);
   vizStlFetch(key, e, gen).finally(() => VIZ_STL.onload && VIZ_STL.onload());
   return e;
@@ -417,9 +418,10 @@ function vizStack(m, S, st, si, x0, P) {
       e = vizStlGet(file);
     }
     if (e.status !== "ok") return null;
+    const src = e.file;
     if (piece) e = vizStlPiece(e, piece[0], piece[1], piece[2]);
     const f = vizStlFit(e, cfg, cfg.wide ? Infinity : (b[0] - a[0]) / Math.max(b[1] - a[1], 1)), r = vizStlMatrix(f, a, b, cfg, xf);
-    S.parts.push({ e, M: r.M, col });
+    S.parts.push({ e, M: r.M, col, group: vizPartGroup(src) });
     if (e.text) S.parts.push({ e: e.text, M: r.M, col: e.textCol || vHex(state.labelTextColor || "#000000") });  // litery etykiety z napisem
     for (let i = 0; i < 8; i++) m.grow(m.xp([i & 1 ? r.hi[0] : r.lo[0], i & 2 ? r.hi[1] : r.lo[1], i & 4 ? r.hi[2] : r.lo[2]], xf));
     return { ...r, e, f, a, b, cfg, file: typeof rx === "string" ? rx : rx && !rx.fits ? vizStlFile(rx) : null };
@@ -1382,6 +1384,87 @@ function vizRenderer(gl) {
     gl.bufferData(gl.ARRAY_BUFFER, data instanceof Float32Array ? data : new Float32Array(data), gl.DYNAMIC_DRAW);
     o.n = data.length / o.per;
   };
+
+  // ---------- Render „Photo” (zgłoszenie nr 9 / pomysł z VAULTaway, 2026-11-07) ----------
+  // Bez śledzenia promieni: N klatek uśrednionych w buforze zmiennoprzecinkowym. Każda klatka ma mapę cieni z jednego
+  // kierunku – na przemian słońce (stożek ~5° → miękkie cienie) i losowy kierunek nieba (półkula → zacienienie
+  // zakamarków i szczelin), do tego przesunięcie kamery o ułamek piksela (gładkie krawędzie). Kolory palety to sRGB:
+  // liczone liniowo, na końcu krzywa ACES i gamma. Wynik zostaje na płótnie (Zapisz PNG).
+  const PHOTO_FS = `uniform sampler2D uSh; uniform mat4 uLVP; uniform vec3 uL; uniform vec3 uEye; uniform float uSun; uniform float uSky; uniform float uAmb;
+     float vis(vec3 w, vec3 n) {
+       vec4 p = uLVP * vec4(w + n * 1.2, 1.0); vec3 q = p.xyz / p.w * 0.5 + 0.5;
+       if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0 || q.z > 1.0) return 1.0;
+       return q.z - 0.0006 > texture(uSh, q.xy).r ? 0.0 : 1.0;
+     }
+     vec3 photo(vec3 n, vec3 c, vec3 w) {
+       vec3 alb = pow(c, vec3(2.2));
+       float ndl = max(dot(n, uL), 0.0), v = ndl > 0.0 ? vis(w, n) : 0.0;
+       vec3 h = normalize(uL + normalize(uEye - w));
+       float s = uSun > 0.0 ? pow(max(dot(n, h), 0.0), 60.0) * 0.35 * v * ndl : 0.0;
+       return alb * ((uSun + uSky) * ndl * v + uAmb) + s * uSun * 0.5;
+     }`;
+  const shadowP = program(
+    `layout(location=0) in vec3 aP; uniform mat4 uLVP; uniform mat4 uM; void main() { gl_Position = uLVP * uM * vec4(aP, 1.0); }`,
+    `out vec4 o; void main() { o = vec4(1.0); }`);
+  const photoLit = program(
+    `layout(location=0) in vec3 aP; layout(location=1) in vec3 aN; layout(location=2) in vec3 aC;
+     uniform mat4 uVP; out vec3 vN; out vec3 vC; out vec3 vW;
+     void main() { vN = aN; vC = aC; vW = aP; gl_Position = uVP * vec4(aP, 1.0); }`,
+    `in vec3 vN; in vec3 vC; in vec3 vW; out vec4 o; ${PHOTO_FS}
+     void main() { vec3 n = normalize(vN); if (dot(n, uEye - vW) < 0.0) n = -n; o = vec4(photo(n, vC, vW), 1.0); }`);
+  const photoPart = program(
+    `layout(location=0) in vec3 aP; uniform mat4 uVP; uniform mat4 uM; out vec3 vW;
+     void main() { vec4 w = uM * vec4(aP, 1.0); vW = w.xyz; gl_Position = uVP * w; }`,
+    `in vec3 vW; uniform vec3 uC; out vec4 o; ${PHOTO_FS}
+     void main() { vec3 n = normalize(cross(dFdx(vW), dFdy(vW))); if (dot(n, uEye - vW) < 0.0) n = -n; o = vec4(photo(n, uC, vW), 1.0); }`);
+  const photoFloor = program(
+    `layout(location=0) in vec3 aP; uniform mat4 uVP; out vec3 vW; void main() { vW = aP; gl_Position = uVP * vec4(aP, 1.0); }`,
+    `in vec3 vW; uniform vec3 uColor; uniform vec2 uC; uniform float uR; out vec4 o; ${PHOTO_FS}
+     void main() { float fade = 1.0 - smoothstep(uR * 0.25, uR * 0.85, length(vW.xz - uC)); o = vec4(photo(vec3(0.0, 1.0, 0.0), uColor, vW) * fade, fade); }`);
+  const QUAD_VS = `layout(location=0) in vec2 aP; out vec2 vT; void main() { vT = aP * 0.5 + 0.5; gl_Position = vec4(aP, 0.0, 1.0); }`;
+  const addP = program(QUAD_VS, `in vec2 vT; uniform sampler2D uT; out vec4 o; void main() { o = texture(uT, vT); }`);
+  const toneP = program(QUAD_VS, `in vec2 vT; uniform sampler2D uT; uniform float uN; out vec4 o;
+     vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+     void main() { vec4 a = texture(uT, vT) / uN; vec3 c = a.a > 0.0 ? a.rgb / a.a : vec3(0.0);
+       o = vec4(pow(aces(c), vec3(1.0 / 2.2)) * a.a, a.a); }`);
+  const quad = gl.createVertexArray(), qb = gl.createBuffer();
+  gl.bindVertexArray(quad); gl.bindBuffer(gl.ARRAY_BUFFER, qb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
+  gl.bindVertexArray(null);
+  const tex = (w, h, fmt, ifmt, type) => {
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, ifmt, w, h, 0, fmt, type, null);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+      gl.texParameteri(gl.TEXTURE_2D, k, v);
+    return t;
+  };
+  let PH = null;  // zasoby renderu „Photo” (tworzone przy pierwszym użyciu, przy zmianie rozmiaru płótna od nowa)
+  const photoRes = (w, h) => {
+    if (PH && PH.w === w && PH.h === h) return PH;
+    if (PH) { for (const t of PH.tex) gl.deleteTexture(t); for (const f of PH.fb) gl.deleteFramebuffer(f); gl.deleteRenderbuffer(PH.rb); }
+    const SM = 2048, sh = tex(SM, SM, gl.DEPTH_COMPONENT, gl.DEPTH_COMPONENT24, gl.UNSIGNED_INT);
+    const shFb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, shFb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, sh, 0);
+    gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
+    const frame = tex(w, h, gl.RGBA, gl.RGBA16F, gl.HALF_FLOAT), acc = tex(w, h, gl.RGBA, gl.RGBA32F, gl.FLOAT);
+    const rb = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    const frFb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, frFb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, frame, 0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+    const okFr = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    const accFb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, accFb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, acc, 0);
+    const okAcc = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    PH = { w, h, SM, sh, shFb, frame, acc, rb, frFb, accFb, ok: okFr && okAcc, tex: [sh, frame, acc], fb: [shFb, frFb, accFb] };
+    return PH;
+  };
+  const floatOk = !!gl.getExtension("EXT_color_buffer_float");
+  let sceneBox = null;
   let fl = null, parts = [];
   return {
     drop(e) {  // zwolnienie buforów siatki, której już nie będzie (podgląd pojemnika po zmianie parametrów)
@@ -1399,7 +1482,107 @@ function vizRenderer(gl) {
       const rects = new Float32Array(64);
       scene.rects.slice(0, 16).forEach((r, i) => rects.set(r, i * 4));
       fl = { rects, n: Math.min(16, scene.rects.length), c: [cx, cz], R };
+      sceneBox = { lo: lo.slice(), hi: hi.slice() };
     },
+    // render „Photo”: camVP(jx, jy) – macierz kamery przesunięta o ułamek piksela; zwraca Promise<boolean> (false – brak
+    // obsługi buforów zmiennoprzecinkowych albo przerwane przez cancel()); onProgress(ułamek)
+    photo({ camVP, eye, floorColor, sunDir = [0.45, 0.85, 0.6], frames = 96, onProgress = () => {}, cancelled = () => false }) {
+      const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+      if (!floatOk || !fl || !sceneBox) return Promise.resolve(false);
+      const P = photoRes(w, h);
+      if (!P.ok) return Promise.resolve(false);
+      const lo = sceneBox.lo, hi = sceneBox.hi, c = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
+      const r = Math.max(200, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2) * 1.15;
+      const sun = vNorm(sunDir), ident = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+      // ciąg Haltona – równomierne próbki (przesunięcie kamery, kierunki)
+      const halton = (i, b) => { let f = 1, x = 0; for (; i > 0; i = Math.floor(i / b)) { f /= b; x += f * (i % b); } return x; };
+      const dirOf = k => {
+        const u = halton(k + 1, 2), v = halton(k + 1, 3);
+        if (k % 2 === 0) {  // słońce: kierunek w stożku ~5° wokół sun
+          const t = vNorm(vCross(sun, [0, 1, 0])), b = vCross(t, sun), a = 2 * Math.PI * u, rr = 0.09 * Math.sqrt(v);
+          return { L: vNorm(vAdd(sun, vAdd(vMul(t, Math.cos(a) * rr), vMul(b, Math.sin(a) * rr)))), sun: 1.25 * 2, sky: 0 };
+        }
+        // niebo: półkula nad podłogą (równomiernie po kącie bryłowym), y ≥ 0,08 – płaskie promienie i tak trafiają w podłogę
+        const y = 0.08 + 0.92 * u, s = Math.sqrt(1 - y * y), a = 2 * Math.PI * v;
+        return { L: [s * Math.cos(a), y, s * Math.sin(a)], sun: 0, sky: 0.36 * 2 * 2 * 0.92 };
+      };
+      gl.bindFramebuffer(gl.FRAMEBUFFER, P.accFb); gl.viewport(0, 0, w, h);
+      gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+      let k = 0;
+      const one = () => {
+        const d = dirOf(k), L = d.L;
+        // mapa cieni z kierunku L (rzut prostokątny na kulę otaczającą scenę)
+        const LV = M4.look(vAdd(c, vMul(L, r * 2)), c, Math.abs(L[1]) > 0.95 ? [0, 0, 1] : [0, 1, 0]);
+        const LVP = M4.mul(M4.ortho(r, r, r * 0.5, r * 3.5), LV);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, P.shFb); gl.viewport(0, 0, P.SM, P.SM);
+        gl.clear(gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.BLEND); gl.depthMask(true);
+        gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
+        gl.useProgram(shadowP.p); gl.uniformMatrix4fv(shadowP.u.uLVP, false, LVP);
+        gl.uniformMatrix4fv(shadowP.u.uM, false, ident);
+        gl.bindVertexArray(T.v); gl.drawArrays(gl.TRIANGLES, 0, T.n);
+        for (const pt of parts) { const g = gpuOf(pt.e); gl.uniformMatrix4fv(shadowP.u.uM, false, pt.M); gl.bindVertexArray(g.v); gl.drawElements(gl.TRIANGLES, g.n, gl.UNSIGNED_INT, 0); }
+        gl.disable(gl.POLYGON_OFFSET_FILL);
+        // klatka: kamera przesunięta o ułamek piksela
+        const VP = camVP((halton(k + 1, 2) - 0.5) * 2 / w, (halton(k + 1, 3) - 0.5) * 2 / h);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, P.frFb); gl.viewport(0, 0, w, h);
+        gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, P.sh);
+        const common = prog => {
+          gl.useProgram(prog.p);
+          gl.uniformMatrix4fv(prog.u.uVP, false, VP); gl.uniformMatrix4fv(prog.u.uLVP, false, LVP);
+          gl.uniform1i(prog.u.uSh, 0); gl.uniform3fv(prog.u.uL, L); gl.uniform3fv(prog.u.uEye, eye);
+          gl.uniform1f(prog.u.uSun, d.sun); gl.uniform1f(prog.u.uSky, d.sky); gl.uniform1f(prog.u.uAmb, 0.03);
+        };
+        gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        common(photoFloor);
+        // podłoga ciemniejsza od tła – widać na niej cień
+        gl.uniform3fv(photoFloor.u.uColor, vMul(floorColor, 0.82)); gl.uniform2fv(photoFloor.u.uC, fl.c); gl.uniform1f(photoFloor.u.uR, fl.R);
+        gl.bindVertexArray(F.v); gl.drawArrays(gl.TRIANGLES, 0, F.n);
+        gl.disable(gl.BLEND); gl.enable(gl.DEPTH_TEST);
+        common(photoLit);
+        gl.bindVertexArray(T.v); gl.drawArrays(gl.TRIANGLES, 0, T.n);
+        common(photoPart);
+        for (const pt of parts) {
+          const g = gpuOf(pt.e);
+          gl.uniformMatrix4fv(photoPart.u.uM, false, pt.M); gl.uniform3fv(photoPart.u.uC, pt.col);
+          gl.bindVertexArray(g.v); gl.drawElements(gl.TRIANGLES, g.n, gl.UNSIGNED_INT, 0);
+        }
+        // dodanie klatki do sumy
+        gl.bindFramebuffer(gl.FRAMEBUFFER, P.accFb); gl.viewport(0, 0, w, h);
+        gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+        gl.useProgram(addP.p); gl.bindTexture(gl.TEXTURE_2D, P.frame); gl.uniform1i(addP.u.uT, 0);
+        gl.bindVertexArray(quad); gl.drawArrays(gl.TRIANGLES, 0, 6);
+        k++;
+      };
+      const show = () => {  // suma / liczba klatek → płótno
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h);
+        gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, P.acc);
+        gl.useProgram(toneP.p); gl.uniform1i(toneP.u.uT, 0); gl.uniform1f(toneP.u.uN, Math.max(1, k));
+        gl.bindVertexArray(quad); gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.bindVertexArray(null); gl.bindTexture(gl.TEXTURE_2D, null);
+      };
+      return new Promise(res => {
+        // po kilka klatek naraz, następna porcja dopiero gdy karta graficzna skończy poprzednią (fence) – polecenia WebGL są
+        // asynchroniczne, bez czekania cała praca trafiłaby do kolejki za jednym razem (zawieszenie, brak postępu)
+        let sync = null;
+        const tick = () => {
+          if (cancelled()) { if (sync) gl.deleteSync(sync); gl.bindFramebuffer(gl.FRAMEBUFFER, null); res(false); return; }
+          if (sync) {
+            if (gl.getSyncParameter(sync, gl.SYNC_STATUS) !== gl.SIGNALED) { setTimeout(tick, 4); return; }
+            gl.deleteSync(sync); sync = null;
+            show(); onProgress(k / frames);
+            if (k >= frames) { res(true); return; }
+          }
+          for (let i = 0; i < 4 && k < frames; i++) one();
+          sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush();
+          setTimeout(tick, 4);
+        };
+        tick();
+      });
+    },
+
     draw(VP, eye, floorColor) {
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -1443,6 +1626,53 @@ function vizPan(cam, dx, dy, h) {
   const r = vNorm(vCross(f, [0, 1, 0])), u = vCross(r, f), s = 2 * cam.dist * Math.tan(VIZ_FOV / 2) / (h || 1);
   return vAdd(vMul(r, -dx * s), vMul(u, dy * s));
 }
+// grupa wydruku części z pliku (index.html: colorGroup); klucz siatki generowanej może mieć dopisek „#…”
+const vizPartGroup = file => file && typeof colorGroup === "function" ? colorGroup(String(file).replace(/#.*$/, "")) : null;
+
+// Część trafiona promieniem o + t·d (kolor po kliknięciu w oknie 3D – zgłoszenie nr 9, 2026-11-07): dla każdej części
+// z grupą promień przeniesiony do układu siatki (odwrotność macierzy M, kolumnowej), najpierw bryła otaczająca, potem
+// trójkąty (Möller–Trumbore). Zwraca { part, t } najbliższej albo null.
+function vizRayParts(parts, o, d) {
+  let best = null, bt = Infinity;
+  for (const p of parts) {
+    if (!p.group) continue;
+    const e = p.e, P = e.pos, I = e.idx, M = p.M;
+    if (!e.bb) {
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < P.length; i += 3) for (let k = 0; k < 3; k++) { const v = P[i + k]; if (v < lo[k]) lo[k] = v; if (v > hi[k]) hi[k] = v; }
+      e.bb = { lo, hi };
+    }
+    // odwrotność części liniowej (3×3) macierzy afinicznej
+    const a = M[0], b = M[4], c = M[8], dd = M[1], ee = M[5], f = M[9], g = M[2], h = M[6], k = M[10];
+    const A = ee * k - f * h, B = -(dd * k - f * g), C = dd * h - ee * g, det = a * A + b * B + c * C;
+    if (!det) continue;
+    const inv = [A / det, -(b * k - c * h) / det, (b * f - c * ee) / det,
+      B / det, (a * k - c * g) / det, -(a * f - c * dd) / det,
+      C / det, -(a * h - b * g) / det, (a * ee - b * dd) / det];
+    const q = [o[0] - M[12], o[1] - M[13], o[2] - M[14]];
+    const lo_ = [inv[0] * q[0] + inv[1] * q[1] + inv[2] * q[2], inv[3] * q[0] + inv[4] * q[1] + inv[5] * q[2], inv[6] * q[0] + inv[7] * q[1] + inv[8] * q[2]];
+    const ld = [inv[0] * d[0] + inv[1] * d[1] + inv[2] * d[2], inv[3] * d[0] + inv[4] * d[1] + inv[5] * d[2], inv[6] * d[0] + inv[7] * d[1] + inv[8] * d[2]];
+    if (vizRayBox(lo_, ld, e.bb.lo, e.bb.hi) >= bt) continue;
+    for (let i = 0; i < I.length; i += 3) {
+      const i0 = I[i] * 3, i1 = I[i + 1] * 3, i2 = I[i + 2] * 3;
+      const e1x = P[i1] - P[i0], e1y = P[i1 + 1] - P[i0 + 1], e1z = P[i1 + 2] - P[i0 + 2];
+      const e2x = P[i2] - P[i0], e2y = P[i2 + 1] - P[i0 + 1], e2z = P[i2 + 2] - P[i0 + 2];
+      const px = ld[1] * e2z - ld[2] * e2y, py = ld[2] * e2x - ld[0] * e2z, pz = ld[0] * e2y - ld[1] * e2x;
+      const det2 = e1x * px + e1y * py + e1z * pz;
+      if (Math.abs(det2) < 1e-12) continue;
+      const id = 1 / det2, sx = lo_[0] - P[i0], sy = lo_[1] - P[i0 + 1], sz = lo_[2] - P[i0 + 2];
+      const u = (sx * px + sy * py + sz * pz) * id;
+      if (u < 0 || u > 1) continue;
+      const qx = sy * e1z - sz * e1y, qy = sz * e1x - sx * e1z, qz = sx * e1y - sy * e1x;
+      const v = (ld[0] * qx + ld[1] * qy + ld[2] * qz) * id;
+      if (v < 0 || u + v > 1) continue;
+      const t = (e2x * qx + e2y * qy + e2z * qz) * id;
+      if (t > 0 && t < bt) { bt = t; best = p; }
+    }
+  }
+  return best ? { part: best, t: bt } : null;
+}
+
 function vizRayBox(o, d, lo, hi) {
   let t0 = 0, t1 = Infinity;
   for (let i = 0; i < 3; i++) {
@@ -1458,10 +1688,13 @@ function vizRayBox(o, d, lo, hi) {
 // ---------- Okno wizualizacji ----------
 let VIZ = null;
 
-function openViz() {
-  if (VIZ) return;
+// dock: true – panel obok edytora, false – pełne okno, brak – jak ostatnio (przyciski pod podglądem wieży)
+function openViz(dock) {
+  // ponowne „Obok edytora” przy otwartym panelu zamyka widok 3D (prośba użytkownika 2026-11-07)
+  if (VIZ) { if (dock === true && state.viz && state.viz.dock) VIZ.close(); else if (dock !== undefined && VIZ.dock) VIZ.dock(dock); return; }
   state.viz = Object.assign({ palette: "ussa", ...VIZ_PALETTES.ussa, labels: true, dims: false, all: false, rotate: false, stl: true, packed: true, ortho: false, explode: 0 }, state.viz || {});
   const V = state.viz;
+  if (dock !== undefined) V.dock = !!dock;
   if (VIZ_PALETTES[V.palette]) Object.assign(V, VIZ_PALETTES[V.palette]);  // paleta mogła się zmienić w nowej wersji
   if (V.palette === "druk") Object.assign(V, vizPrintColors());  // kolory części mogły się zmienić od ostatniego otwarcia
   if (state.stacks.length < 2) V.all = false;
@@ -1476,7 +1709,15 @@ function openViz() {
       tr("Przeciągnij – obrót, prawy przycisk – przesuwanie, kółko – przybliżenie, kliknięcie frontu – otwarcie, dwuklik – widok domyślny.") + " " +
       tr("Moduły, fronty, zamki, pudełka, dachy, podstawa, stopki, koła, kręgosłup, pegboard i uchwyty z plików STL (uproszczone; pierwsze otwarcie trwa dłużej); złożone – moduły zapięte jak w rzeczywistości, rączka wsunięta.")));
   document.body.append(ov);
-  document.body.style.overflow = "hidden";
+  // „Obok edytora” (zgłoszenie nr 9 – widok 3D na żywo przy edycji, 2026-11-07): okno jako panel z prawej (na wąskim ekranie
+  // u dołu), strona pod nim dalej działa, a każda zmiana projektu (save/render w index.html → VIZ.refresh) przebudowuje scenę
+  const applyDock = () => {
+    ov.classList.toggle("dock", !!V.dock);
+    ov.setAttribute("aria-modal", V.dock ? "false" : "true");
+    document.body.classList.toggle("viz-docked", !!V.dock);
+    document.body.style.overflow = V.dock ? "" : "hidden";
+  };
+  applyDock();
 
   const gl = canvas.getContext("webgl2", { antialias: true, alpha: true, premultipliedAlpha: true, preserveDrawingBuffer: true });
   let R = null;
@@ -1487,7 +1728,8 @@ function openViz() {
   const goal = { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist, t: cam.t.slice() };
   const open = new Map(), target = new Map();
   let hover = null, scene = null, labelsKey = "", geo = true, dirty = true, last = performance.now(), raf = 0;
-  let drag = null, lastEye = [0, 0, 0];
+  let drag = null, lastEye = [0, 0, 0], liveFit = false, liveBox = "";
+  let photoJob = null, photoShown = false;  // render „Photo”: trwający ({ cancel }) i wynik na płótnie
   const accent = vHex(cssHex("--accent"));
 
   const stlOn = () => V.stl && location.protocol !== "file:";
@@ -1555,6 +1797,8 @@ function openViz() {
   const step = now => {
     const dt = Math.min(0.05, Math.max(0, now - last) / 1000);
     last = now;
+    // ruch kamery albo zmiana sceny w trakcie renderu „Photo” – przerwanie
+    if (photoJob && (geo || dirty)) photoJob.cancel = true;
     for (const [id, t] of target) {
       // stała prędkość (pełne otwarcie ~2,4 s): pierwsze 40 % ruchu to odpinanie zatrzasków skrzynki albo obrót kluczyka
       // szuflady (prośby użytkownika 2026-10-27: wolniejsze otwieranie zamka, kluczyk w tym samym tempie)
@@ -1571,15 +1815,22 @@ function openViz() {
       cam.yaw += dy * k; cam.pitch += dp * k; cam.dist += dd * k; cam.t = vAdd(cam.t, vMul(dtv, k)); dirty = true;
     }
     if (geo) rebuild();
+    // zmiana projektu przy otwartym oknie: kamera dopasowuje się tylko, gdy zmienił się rozmiar sceny (np. nowa warstwa)
+    if (liveFit && scene) {
+      liveFit = false;
+      const box = [...scene.m.lo, ...scene.m.hi].map(v => Math.round(v / 20)).join(",");
+      if (liveBox && box !== liveBox) fit(false);
+      liveBox = box;
+    }
     // licznik wczytywanych kształtów (serwer upraszcza duże pliki po jednym – do tego czasu bryły poglądowe)
     const all = [...VIZ_STL.map.values()], loading = all.filter(e => e.status === "loading").length;
     const txt = loading && stlOn() ? tr("wczytywanie kształtów: {a}/{b}", { a: all.length - loading, b: all.length }) : "";
-    if (badge.textContent !== txt) badge.textContent = txt;
+    if (!photoJob && badge.textContent !== txt) badge.textContent = txt;
     if (refit && !loading) { refit = false; fit(false); }
-    if (dirty) draw();
+    if (dirty && !photoJob) { draw(); photoShown = false; }
   };
 
-  const pick = (px, py) => {
+  const ray = (px, py) => {
     const w = canvas.clientWidth, h = canvas.clientHeight, nx = px / w * 2 - 1, ny = 1 - py / h * 2, th = Math.tan(VIZ_FOV / 2);
     const f = vNorm(vSub(cam.t, lastEye)), r = vNorm(vCross(f, [0, 1, 0])), u = vCross(r, f);
     let o = lastEye, d = vNorm(vAdd(f, vAdd(vMul(r, nx * th * w / h), vMul(u, ny * th))));
@@ -1588,9 +1839,53 @@ function openViz() {
       o = vAdd(lastEye, vAdd(vMul(r, nx * hh * w / h), vMul(u, ny * hh)));
       d = f;
     }
+    return [o, d];
+  };
+  const pick = (px, py) => {
+    const [o, d] = ray(px, py);
     let best = null, bt = Infinity;
     for (const p of scene.picks) { const t = vizRayBox(o, d, p.lo, p.hi); if (t < bt) { bt = t; best = p.id; } }
     return best;
+  };
+  // Kolor po kliknięciu (zgłoszenie nr 9, 2026-11-07): tryb „Kolor kliknięciem” – kliknięta część pokazuje okienko
+  // z filamentami (COLOR_PALETTE) dla jej grupy wydruku. Zmienia kolor grupy w oknie (paleta „własne”, a w „kolory części”
+  // – kolory do wydruku); „także do wydruku” zapisuje go od razu w „Kolorach części” (state.colors).
+  let paintBox = null;
+  const paintClose = () => { if (paintBox) { paintBox.remove(); paintBox = null; } };
+  const paintSet = (g, hex, print) => {
+    if (print || V.palette === "druk") { state.colors = state.colors || {}; state.colors[g] = hex.toUpperCase(); }
+    if (V.palette === "druk") Object.assign(V, vizPrintColors());
+    else { Object.assign(V, vizGroupRoles(V)); V[VIZ_GROUP_ROLE[g]] = hex; V.palette = "custom"; }
+    save(); geo = true; renderBar();
+    if (print && typeof renderResult === "function") renderResult();
+  };
+  const paintAt = (px, py) => {
+    paintClose();
+    if (!scene) return;
+    const hit = vizRayParts(scene.parts, ...ray(px, py)), g = hit && hit.part.group;
+    if (!g || !(g in VIZ_GROUP_ROLE)) {
+      if (!V.stl) toast(tr("Kolor kliknięciem działa na kształtach z plików STL – włącz „Kształty z plików STL”."), false);
+      return;
+    }
+    const groups = typeof COLOR_GROUPS !== "undefined" ? COLOR_GROUPS : [], name = tr((groups.find(x => x[0] === g) || [])[1] || g);
+    const cur = (vizGroupColors(V)[g] || "").toLowerCase(), pal = typeof filColors === "function" ? filColors(g === "opony" && FIL()[FIL_TPU] ? FIL_TPU : undefined) : [];
+    const printChk = el("input", { type: "checkbox", checked: V.palette === "druk" || !!V.paintPrint, disabled: V.palette === "druk",
+      onchange: e => { V.paintPrint = e.target.checked; save(); } });
+    const pickHex = hex => { paintSet(g, hex, printChk.checked); paintClose(); };
+    paintBox = el("div", { class: "viz-paint", role: "dialog", "aria-label": tr("Kolor grupy {g}", { g: name }) },
+      el("div", { class: "row" }, el("b", {}, name), el("span", { style: "flex:1" }), el("button", { class: "small", title: tr("Zamknij (Esc)"), onclick: paintClose }, "✕")),
+      el("div", { class: "hint" }, tr("Kolor całej grupy – tak jak w „Kolorach części” w „Przygotuj wydruk”.")),
+      el("div", { class: "hint" }, g === "opony" && typeof FIL === "function" && FIL()[FIL_TPU] ? FIL_TPU : typeof filLine === "function" ? filLine() : ""),
+      el("div", { class: "viz-paint-sw" }, pal.map(([hex, n]) => el("button", { class: "sw" + (hex.toLowerCase() === cur ? " on" : ""), title: n,
+        style: `background:${hex}`, "aria-label": n, onclick: () => pickHex(hex) }))),
+      el("div", { class: "row" }, el("label", {}, tr("własny") + " ", el("input", { type: "color", value: /^#[0-9a-f]{6}$/i.test(cur) ? cur : "#888888", onchange: e => pickHex(e.target.value) })),
+        el("label", { title: V.palette === "druk" ? tr("Paleta „kolory części” to kolory do wydruku") : "" }, printChk, " ", tr("także do wydruku"))));
+    stage.append(paintBox);
+    const W = stage.clientWidth, H = stage.clientHeight, bw = paintBox.offsetWidth, bh = paintBox.offsetHeight;
+    paintBox.style.left = Math.max(6, Math.min(W - bw - 6, px + 12)) + "px";
+    paintBox.style.top = Math.max(6, Math.min(H - bh - 6, py + 12)) + "px";
+    const first = paintBox.querySelector(".sw.on") || paintBox.querySelector(".sw");
+    if (first) first.focus();
   };
   const toggle = id => { const now = target.has(id) ? target.get(id) : (open.get(id) || 0); target.set(id, now > 0.5 ? 0 : 1); };
   const setAll = v => { for (const p of scene.picks) target.set(p.id, v); };
@@ -1625,13 +1920,18 @@ function openViz() {
       canvas.style.cursor = "grabbing";
       return;
     }
+    if (V.paint) { if (hover) { hover = null; geo = true; } canvas.style.cursor = "crosshair"; return; }
+    if (photoJob || photoShown) return;  // podświetlenie frontu zamazałoby zdjęcie
     const id = pick(e.clientX - rc.left, e.clientY - rc.top);
     if (id !== hover) { hover = id; geo = true; }
     canvas.style.cursor = id ? "pointer" : "grab";
   });
   canvas.addEventListener("pointerup", e => {
     const rc = canvas.getBoundingClientRect();
-    if (drag && !drag.pan && drag.moved < 5) { const id = pick(e.clientX - rc.left, e.clientY - rc.top); if (id) toggle(id); }
+    if (drag && !drag.pan && drag.moved < 5) {
+      if (V.paint) paintAt(e.clientX - rc.left, e.clientY - rc.top);
+      else { const id = pick(e.clientX - rc.left, e.clientY - rc.top); if (id) toggle(id); }
+    }
     drag = null;
     canvas.style.cursor = "grab";
   });
@@ -1645,6 +1945,7 @@ function openViz() {
   canvas.addEventListener("dblclick", () => view("q"));
 
   const close = () => {
+    if (photoJob) photoJob.cancel = true;
     cancelAnimationFrame(raf);
     ro.disconnect();
     document.removeEventListener("keydown", onKey);
@@ -1652,13 +1953,43 @@ function openViz() {
     if (lose) lose.loseContext();
     ov.remove();
     document.body.style.overflow = "";
+    document.body.classList.remove("viz-docked");
     VIZ_STL.onload = null;
     VIZ = null;
   };
-  const onKey = e => { if (e.key === "Escape") close(); };
+  // Esc w polu edytora obok zadokowanego okna nie zamyka okna
+  const onKey = e => { if (e.key === "Escape") { if (paintBox) paintClose(); else if (!V.dock || ov.contains(e.target) || e.target === document.body) close(); } };
   document.addEventListener("keydown", onKey);
-  const ro = new ResizeObserver(() => { dirty = true; });
+  // tylko prawdziwa zmiana rozmiaru (przebudowa paska wywołuje obserwatora bez zmiany – przerywałoby to render „Zdjęcie”)
+  let roSize = "";
+  const ro = new ResizeObserver(() => { const k = stage.clientWidth + "x" + stage.clientHeight; if (k !== roSize) { roSize = k; dirty = true; } });
   ro.observe(stage);
+
+  // „Zdjęcie” (render Photo w vizRenderer): kamera zatrzymana w bieżącym ujęciu, ~96 klatek uśrednionych; drugi klik – przerwij
+  const photoRun = async () => {
+    if (photoJob) { photoJob.cancel = true; return; }
+    if (!scene || !R) return;
+    Object.assign(cam, { yaw: goal.yaw, pitch: goal.pitch, dist: goal.dist, t: goal.t.slice() });
+    V.rotate = false;
+    draw();
+    const w = canvas.clientWidth, h = canvas.clientHeight, hh = cam.dist * Math.tan(VIZ_FOV / 2);
+    const proj = V.ortho ? M4.ortho(hh * w / h, hh, cam.dist * 0.05, cam.dist * 20) : M4.persp(VIZ_FOV, w / h, cam.dist * 0.05, cam.dist * 20);
+    const VP0 = M4.mul(proj, M4.look(lastEye, cam.t, [0, 1, 0]));
+    const job = photoJob = { cancel: false };
+    dirty = false; geo = false;
+    renderBar();
+    const bg = vHex(cssHex("--bg")), panel = vHex(cssHex("--panel"));
+    // słońce z lewej, z przodu i z góry względem kamery – cień pada w prawo do tyłu, widoczny na podłodze
+    const az = cam.yaw - 0.9, sunDir = [Math.sin(az) * 0.62, 0.78, Math.cos(az) * 0.62];
+    const ok = await R.photo({ eye: lastEye, floorColor: vMix(bg, panel, 0.55), sunDir, frames: 96,
+      camVP: (jx, jy) => M4.mul(new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, jx, jy, 0, 1]), VP0),
+      onProgress: f => { badge.textContent = tr("zdjęcie: {p} %", { p: Math.round(f * 100) }); },
+      cancelled: () => job.cancel });
+    photoJob = null; badge.textContent = "";
+    if (ok) { photoShown = true; dirty = false; toast(tr("Zdjęcie gotowe – „Zapisz PNG” zapisze je w pliku. Obrót albo przybliżenie wraca do zwykłego widoku."), false); }
+    else { dirty = true; if (!job.cancel) toast(tr("Ta przeglądarka nie obsługuje renderu „Zdjęcie” (WebGL 2 z buforami zmiennoprzecinkowymi)."), false); }
+    if (VIZ) renderBar();
+  };
 
   const savePng = () => {
     if (dirty && scene) draw();
@@ -1703,18 +2034,28 @@ function openViz() {
         location.protocol !== "file:" && !WEB ? tog("stl", tr("Kształty z plików STL")) : null,
         state.stacks.length > 1 ? tog("all", tr("Wszystkie zestawy")) : null, badge),
       el("span", { class: "viz-group" }, tr("Kolory:") + " ",
+        el("button", { class: "small" + (V.paint ? " on" : ""), title: tr("Kliknij część w widoku, żeby wybrać kolor jej grupy (moduły, fronty, pudełka…)"),
+          onclick: () => { V.paint = !V.paint; paintClose(); save(); geo = true; renderBar(); } }, "🎨 " + tr("Kolor kliknięciem")),
         sel(V.palette, palettes, v => { V.palette = v; if (VIZ_PALETTES[v]) Object.assign(V, VIZ_PALETTES[v]); if (v === "druk") Object.assign(V, vizPrintColors()); save(); geo = true; renderBar(); }),
         ...Object.keys(VIZ_GROUP_ROLE).map(color)),
       el("span", { class: "viz-group", style: "margin-left:auto" },
+        el("button", { class: "small" + (V.dock ? " on" : ""), title: tr("Okno 3D obok edytora – zmiany w projekcie widać od razu"),
+          // panel obok edytora: ponowne kliknięcie zamyka widok 3D (pełne okno – przycisk „Wizualizacja 3D” pod podglądem)
+          onclick: () => { if (V.dock) { close(); return; } V.dock = true; save(); applyDock(); renderBar(); setTimeout(() => fit(false), 50); } }, tr("Obok edytora")),
+        el("button", { class: "small" + (photoJob ? " on" : ""), onclick: photoRun,
+          title: photoJob ? tr("Przerwij zdjęcie") : tr("Realistyczny obraz z miękkimi cieniami i światłem nieba (kilka sekund), potem „Zapisz PNG”. Obrót albo przybliżenie wraca do zwykłego widoku.") },
+          "📷 " + tr("Zdjęcie")),  // ten sam napis w trakcie (zmiana szerokości paska zmieniłaby rozmiar płótna i przerwała render)
         el("button", { class: "small", onclick: savePng }, tr("Zapisz PNG")),
         el("button", { class: "small", title: tr("Zamknij (Esc)"), onclick: close }, "✕")));
   }
   renderBar();
 
   // step: ręczne klatki do testów (np. gdy karta w tle nie dostaje requestAnimationFrame)
-  VIZ = { close, step: (ms = 16) => step(last + ms), view, setAll, toggleFirst: () => scene.picks[0] && toggle(scene.picks[0].id),
-    state: () => ({ cam: { ...cam }, open: [...open], picks: scene && scene.picks.length }),
-    parts: () => scene ? scene.parts : [] };  // test zgodności kolorów z grupami wydruku
+  VIZ = { close, step: (ms = 16) => step(last + ms), view, setAll, refresh: () => { geo = true; liveFit = true; }, toggleFirst: () => scene.picks[0] && toggle(scene.picks[0].id),
+    state: () => ({ cam: { ...cam }, open: [...open], picks: scene && scene.picks.length, photo: photoShown, photoBusy: !!photoJob }),
+    parts: () => scene ? scene.parts : [],  // test zgodności kolorów z grupami wydruku
+    // przyciski pod podglądem wieży przy otwartym oknie: przełączenie pełne okno / obok edytora
+    dock: on => { if (!!V.dock === !!on) return; V.dock = !!on; save(); applyDock(); renderBar(); setTimeout(() => fit(false), 50); } };
   if (!R) return;
   rebuild();
   requestAnimationFrame(() => { fit(true); raf = requestAnimationFrame(frame); });

@@ -410,6 +410,7 @@ function gdParts(i, s) {
 function gdAddToBom(b) {
   if (!state.gd || typeof state.gd !== "object") return;
   for (const i of gdInstances()) {
+    if (!inScope(i.key)) continue;
     const s = state.gd[i.key];
     if (!gdCount(i.key)) continue;
     for (const p of gdParts(i, gdLayout(i.key, i)))
@@ -526,10 +527,12 @@ function gdPreset(s, g, what) {
 
 function renderGd(box) {
   GD.box = box;
-  const inst = gdInstances();
+  // zakres zakładek: szuflady wybranego zestawu (kopiowanie układu – z całego projektu)
+  const instAll = gdInstances(), inst = instAll.filter(i => inScope(i.key));
   if (!inst.length) {
     box.replaceChildren(el("div", { class: "card" }, el("h3", {}, tr("Przegródki szuflad (Grid Dividers)")),
-      el("p", {}, tr("Żadna szuflada nie ma wkładu „przegródki Grid Dividers”. Ustaw go w edytorze zestawu: Wkład → przegródki Grid Dividers.")),
+      el("p", {}, scopeAll() ? tr("Żadna szuflada nie ma wkładu „przegródki Grid Dividers”. Ustaw go w edytorze zestawu: Wkład → przegródki Grid Dividers.")
+        : tr("Żadna szuflada w zestawie „{name}” nie ma wkładu „przegródki Grid Dividers”. Ustaw go w edytorze zestawu: Wkład → przegródki Grid Dividers.", { name: cur().name })),
       el("p", { class: "hint" }, tr("Przegródki wsuwa się w otwory w dnie pudełka szuflady (co 10,5 mm) – zamiast płyty gridfinity."))));
     return;
   }
@@ -543,7 +546,7 @@ function renderGd(box) {
   const count = gdCount;
   const set = (k, v) => { histBreak(); s[k] = v; save(); renderResult(); };
   const setG = (k, v) => { state[k] = v; save(); renderResult(); };
-  const same = inst.filter(x => x.key !== i.key && x.fam === i.fam && x.d === i.d && count(x.key));
+  const same = instAll.filter(x => x.key !== i.key && x.fam === i.fam && x.d === i.d && count(x.key));
 
   const head = el("div", { class: "bin-choose" }, el("label", {}, tr("Szuflada:"),
     sel(i.key, inst.map(x => [x.key, x.label + " – " + tr("{n} przegr.", { n: count(x.key) })]), v => { state.gdCur = v; GD.sel = -1; save(); renderResult(); })));

@@ -81,14 +81,17 @@ function renderAsm(box) {
   state.asmDone = state.asmDone || {};
   if (state.binVer !== 2 && typeof binMigrate === "function" && Array.isArray(state.binSets)) binMigrate();
   const inst = new Map(binInstances().map(x => [x.key, x.t]));
-  const all = state.stacks.map(st => ({ st, steps: asmSteps(st, inst) }));
+  const every = state.stacks.map(st => ({ st, steps: asmSteps(st, inst) }));
+  const idsAll = every.flatMap(({ st, steps }) => steps.map(s => st.id + "|" + s.id));
+  // znaczniki usuniętych kroków (zmieniony projekt) nie są potrzebne – liczone z całego projektu
+  for (const k of Object.keys(state.asmDone)) if (!idsAll.includes(k)) delete state.asmDone[k];
+  // zakres zakładek: kroki wybranego zestawu albo wszystkich
+  const all = every.filter(({ st }) => scopeStacks().includes(st));
   const ids = all.flatMap(({ st, steps }) => steps.map(s => st.id + "|" + s.id));
   const done = ids.filter(k => state.asmDone[k]).length;
-  // znaczniki usuniętych kroków (zmieniony projekt) nie są potrzebne
-  for (const k of Object.keys(state.asmDone)) if (!ids.includes(k)) delete state.asmDone[k];
   const head = el("div", { class: "row" }, el("h3", { style: "margin:0" }, tr("Składanie")),
     el("progress", { max: ids.length || 1, value: done }), el("span", {}, tr("Zrobione kroki: {done} z {n}", { done, n: ids.length })),
-    done ? el("button", { class: "small", onclick: () => { histBreak(); state.asmDone = {}; save(); renderResult(); toast(tr("Wyczyszczono zaznaczone kroki")); } }, tr("Wyczyść zaznaczenia")) : null);
+    done ? el("button", { class: "small", onclick: () => { histBreak(); for (const k of ids) delete state.asmDone[k]; save(); renderResult(); toast(tr("Wyczyszczono zaznaczone kroki")); } }, tr("Wyczyść zaznaczenia")) : null);
   const stacks = all.map(({ st, steps }) => el("section", { class: "asm-stack" },
     el("h4", {}, st.name + (st.qty > 1 ? " – " + tr("kroki dla jednej wieży, powtórz {n}×", { n: st.qty }) : "")),
     el("ol", { class: "asm" }, steps.map(s => {

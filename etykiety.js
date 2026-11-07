@@ -66,11 +66,14 @@ const labTextColor = q => q.styl === "wpuszczony" || (q.typ !== "etykieta" && q.
 const labFileOf = q => { const f = LAB_FILE + labName(q) + ".stl"; BIN_GEN.set(f, q); return f; };
 const labEmpty = l => !String(l.tekst || "").trim() && !l.symbol;
 
+// etykieta w zakresie zakładek: przypisana do frontu (src) albo dodana w widoku zestawu (st); inne – w „Całym projekcie”
+const labIn = l => inScope(l.src || null, l.st);
 function labState() {
   if (!Array.isArray(state.labels)) state.labels = [];
   if (state.labelsBom === undefined) state.labelsBom = true;
-  if (!state.labels.length) state.labels.push(labNew());
+  if (!state.labels.some(labIn)) state.labels.push(labNew(scopeTag()));
   state.labelCur = Math.max(0, Math.min(state.labels.length - 1, state.labelCur || 0));
+  if (!labIn(state.labels[state.labelCur])) state.labelCur = state.labels.findIndex(labIn);
   return state.labels[state.labelCur];
 }
 function labNew(from) {
@@ -98,15 +101,16 @@ function labFronts() {
 function labFromProject() {
   histBreak();
   labState();
-  if (state.labels.length === 1 && labEmpty(state.labels[0]) && !state.labels[0].src) state.labels = [];
+  const own = state.labels.filter(labIn);  // jedyna etykieta zakresu – nietknięta pusta startowa – znika
+  if (own.length === 1 && labEmpty(own[0]) && !own[0].src) state.labels.splice(state.labels.indexOf(own[0]), 1);
   const cur = state.labels[state.labelCur] || {};
   let n = 0;
-  for (const f of labFronts()) {
+  for (const f of labFronts().filter(f => inScope(f.src))) {  // zakres zakładek: fronty wybranego zestawu
     const e = state.labels.find(l => l.src === f.src);
     if (e) Object.assign(e, { rodzaj: f.rodzaj, qty: f.qty, gdzie: f.gdzie });
     else { state.labels.push(labNew({ symbol: cur.symbol || "", h: cur.h || 0.4, styl: cur.styl || "wypukly", ...f })); n++; }
   }
-  state.labelCur = Math.max(0, state.labels.findIndex(l => l.src && labEmpty(l)));
+  state.labelCur = Math.max(0, state.labels.findIndex(l => l.src && labEmpty(l) && labIn(l)));
   save(); renderResult();
   toast(n ? tr("Dodano etykiety z projektu: {n}", { n }) : tr("Wszystkie fronty projektu mają już etykiety"));
 }
@@ -115,9 +119,11 @@ function labFromProject() {
 // ostrzeżenie w „Uwagach do projektu” i w „Przygotuj wydruk”. Zwraca tekst albo null.
 function labMismatch() {
   if (state.blankLabels !== false) return null;
+  // etykiety w ogóle nieużywane (żadnej z frontem ani z napisem w zakresie) – świadomie bez etykiet, bez ostrzeżenia
+  if (!(state.labels || []).some(l => labIn(l) && (l.src || !labEmpty(l)))) return null;
   const need = { d: 0, s: 0 }, have = { d: 0, s: 0 };
-  for (const f of labFronts()) need[f.rodzaj] += +f.qty || 0;
-  if (state.labelsBom !== false) for (const l of state.labels || []) if (!labEmpty(l)) have[l.rodzaj === "s" ? "s" : "d"] += +l.qty || 0;
+  for (const f of labFronts()) if (inScope(f.src)) need[f.rodzaj] += +f.qty || 0;
+  if (state.labelsBom !== false) for (const l of state.labels || []) if (!labEmpty(l) && labIn(l)) have[l.rodzaj === "s" ? "s" : "d"] += +l.qty || 0;
   const bad = ["d", "s"].filter(k => need[k] !== have[k]);
   if (!bad.length) return null;
   return tr("Puste etykiety są wyłączone, a liczba etykiet z napisem nie zgadza się z liczbą frontów: {list}.", {
@@ -141,7 +147,7 @@ function labAddToBom(b) {
   if (!Array.isArray(state.labels) || state.labelsBom === false) return;
   for (const l of state.labels) {
     const n = +l.qty || 0;
-    if (!n || labEmpty(l)) continue;
+    if (!n || labEmpty(l) || !labIn(l)) continue;
     const q = labParams(l);
     b.addGen("Etykiety z napisem", String(l.tekst || "").replace(/\n|\|/g, " / ") || "(" + l.symbol + ")", labFileOf(q), n, q);
     const plain = findAll(labPlain(q.rodzaj))[0], e = plain && b.parts.get(plain);
@@ -223,7 +229,9 @@ function renderLabels(box) {
     return;
   }
   // lista etykiet
-  const list = el("div", { class: "lab-list" }, ...state.labels.map((l, i) => el("div", {
+  // zakres zakładek: tylko etykiety wybranego zestawu (indeksy jak w state.labels)
+  const inCnt = state.labels.filter(labIn).length, outCnt = state.labels.length - inCnt;
+  const list = el("div", { class: "lab-list" }, ...state.labels.map((l, i) => !labIn(l) ? null : el("div", {
     class: "lab-item" + (i === state.labelCur ? " on" : ""), onclick: () => { state.labelCur = i; rerender(); } },
     el("span", { class: "q" }, "×" + (+l.qty || 0)),
     el("span", { class: "lab-txt" }, String(l.tekst || "").replace(/\n|\|/g, " / ") || (l.symbol ? "(" + l.symbol + ")" : tr("(pusta)")),
@@ -238,11 +246,12 @@ function renderLabels(box) {
   const tools = el("div", { class: "row" },
     el("button", { class: "small", title: tr("Po jednej etykiecie na każdy front szuflady i skrzynki w projekcie, z opisem miejsca. Kolejne kliknięcie dopisuje tylko nowe fronty."),
       onclick: labFromProject }, tr("Etykiety z projektu")),
-    el("button", { class: "small", onclick: () => { state.labels.push(labNew({ rodzaj: cur.rodzaj, symbol: cur.symbol, h: cur.h, styl: cur.styl })); state.labelCur = state.labels.length - 1; rerender(); } }, tr("+ Nowa")),
+    el("button", { class: "small", onclick: () => { state.labels.push(labNew({ rodzaj: cur.rodzaj, symbol: cur.symbol, h: cur.h, styl: cur.styl, ...scopeTag() })); state.labelCur = state.labels.length - 1; rerender(); } }, tr("+ Nowa")),
     el("button", { class: "small", onclick: () => { state.labels.splice(state.labelCur + 1, 0, labNew(cur)); state.labelCur++; rerender(); } }, tr("Duplikuj")),
-    el("button", { class: "small", disabled: state.labels.length < 2, onclick: () => {
+    el("button", { class: "small", disabled: inCnt < 2, onclick: () => {
       histBreak(); state.labels.splice(state.labelCur, 1); state.labelCur = Math.max(0, state.labelCur - 1); rerender(); toast(tr("Usunięto etykietę"));
-    } }, tr("Usuń")));
+    } }, tr("Usuń")),
+    outCnt ? el("span", { class: "hint" }, tr("Etykiety innych zestawów i całego projektu: {n} – widać je w zakresie „Cały projekt”.", { n: outCnt })) : null);
   // edycja zaznaczonej
   const txt = el("textarea", { class: "lab-text", rows: 3, maxlength: 60, placeholder: tr("np. M3 × 12 – Enter albo | dzieli na linie"),
     oninput: e => { cur.tekst = e.target.value; clearTimeout(LAB.timer); LAB.timer = setTimeout(rerender, 400); } });
@@ -258,7 +267,7 @@ function renderLabels(box) {
     LAB.picker ? labPicker(q.symbol, k => { cur.symbol = k; LAB.picker = false; rerender(); }) : null,
     row(tr("styl napisu"), sel(q.styl, [["wypukly", tr("wypukły – druk licem do góry")], ["wklesly", tr("wklęsły – druk licem do stołu")],
       ["wpuszczony", tr("wpuszczony – drugi filament, druk licem do stołu")]], ch("styl"))),
-    q.styl === "wpuszczony" ? row(tr("kolor napisu (wszystkie wpuszczone)"), sel(state.labelTextColor || "#000000", COLOR_PALETTE.map(([h, n]) => [h, tr(n)]),
+    q.styl === "wpuszczony" ? row(tr("kolor napisu (wszystkie wpuszczone)"), sel(state.labelTextColor || "#000000", filOpts(state.labelTextColor || "#000000"),
       v => { state.labelTextColor = v; rerender(); })) : null,
     row(q.styl === "wypukly" ? tr("wysokość napisu") : q.styl === "wklesly" ? tr("głębokość napisu") : tr("grubość napisu"),
       sel(String(q.h), (q.styl === "wypukly" ? ["0.4", "0.6", "0.8"] : ["0.4", "0.6"])

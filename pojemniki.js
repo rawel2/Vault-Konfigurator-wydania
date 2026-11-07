@@ -119,10 +119,10 @@ function binMigrate() {
   state.binVer = 2;
   if (typeof state.binCur !== "string") state.binCur = null;
 }
-function binNewManual(t) {
+function binNewManual(t, tag = {}) {
   let n = 1;
   while (state.binSets.some(s => s.key === "m:" + n)) n++;
-  state.binSets.push({ key: "m:" + n, t: binTargetFix(t), qty: 1, items: [] });
+  state.binSets.push({ key: "m:" + n, t: binTargetFix(t), qty: 1, items: [], ...tag });
   return "m:" + n;
 }
 function binSets() {
@@ -266,6 +266,7 @@ function binAddToBom(b) {
   for (const s of state.binSets) {
     const i = inst.get(s.key), manual = (s.key || "").startsWith("m:");
     if (!i && !manual) continue;
+    if (!inScope(i ? s.key : null, s.st)) continue;  // zakres zakładek: wybrany zestaw albo cały projekt
     const t = i ? i.t : binTargetFix(s.t), n = i ? (s.off ? 0 : i.qty) : (+s.qty || 0);
     if (!n) continue;
     const label = binSetLabel(s, inst);
@@ -379,7 +380,13 @@ function binMesh(p) {
       e.status = "ok";
     })
     .catch(err => { e.status = "err"; BIN.err = err.message; })
-    .finally(() => binRefresh());
+    .finally(() => {
+      binRefresh();
+      // formularz wybranego pojemnika czyta z meta „nie mieści się” (gniazda na głowice) i wysokości liter napisów – po
+      // nadejściu podglądu trzeba go przerysować (zgłoszenie użytkownika 2026-11-07: 11 gniazd w 3 × 2 bez komunikatu)
+      const set = state.tab === "bins" && state.binSets && binSet(), it = set && set.items[BIN.sel];
+      if (e.meta && (e.meta.nofit || e.meta.letters) && it && JSON.stringify(binFull(it)) === key) { glowKeepFocus(); renderResult(); }
+    });
   return e;
 }
 
@@ -681,7 +688,7 @@ function glowSlotsBox(q, rerender, nofit, title, hint, ver = BIN_GLOW_VER) {
       oninput: ev => { q.glowice = g; g[i].t = ev.target.value; save(); clearTimeout(BIN.napT);
         BIN.napT = setTimeout(() => { glowKeepFocus(); rerender(); }, 500); } });
     inp.value = x.t;
-    box.append(el("div", { class: "row" }, el("span", { class: "q" }, String(i + 1)),
+    box.append(el("div", { class: "row glow-row" }, el("span", { class: "q" }, String(i + 1)),
       sel(x.r, RODZ, v => { g[i].r = v; put(); }), inp,
       el("button", { class: "small", title: tr("Usuń"), onclick: ev => { ev.preventDefault(); g.splice(i, 1); put(); } }, "✕")));
   });
@@ -694,7 +701,7 @@ function glowSlotsBox(q, rerender, nofit, title, hint, ver = BIN_GLOW_VER) {
   box.append(el("label", { class: "bin-row" }, el("span", {}, tr("styl napisu")), sel(wkl ? "wklesly" : "wpuszczony",
       [["wpuszczony", tr("wpuszczony – drugi filament, równo z półką")], ["wklesly", tr("wklęsły – jeden kolor")]], v => { q.styl_napisu = v; save(); rerender(); })),
     wkl ? null : el("label", { class: "bin-row" }, el("span", {}, tr("kolor napisu (wspólny z etykietami)")),
-      sel(state.labelTextColor || "#000000", COLOR_PALETTE.map(([h, nm]) => [h, tr(nm)]), v => { state.labelTextColor = v; save(); rerender(); })));
+      sel(state.labelTextColor || "#000000", filOpts(state.labelTextColor || "#000000"), v => { state.labelTextColor = v; save(); rerender(); })));
   if (pisze) requestAnimationFrame(() => {
     const f = document.querySelector(`.bin-glow[data-k="${pisze[0]}"]`);
     if (f) { f.focus(); f.setSelectionRange(pisze[1], pisze[2]); }
@@ -729,6 +736,7 @@ function glowInstances() {
 }
 function glowAddToBom(b) {
   for (const i of glowInstances()) {
+    if (!inScope(i.key)) continue;
     const p = glowParams(i.key, i.d);
     if (p.glowice.length || p.skarpety) b.addGen("Wkłady", i.label, binFileOf(p), i.qty, p);
   }
@@ -771,7 +779,7 @@ function binNapisyForm(it, q, rerender) {
     el("label", { class: "bin-row" }, el("span", {}, tr("styl napisu")), sel(wkl ? "wklesly" : "wpuszczony",
       [["wpuszczony", tr("wpuszczony – drugi filament, równo z półką")], ["wklesly", tr("wklęsły – jeden kolor")]], v => { q.styl_napisu = v; save(); rerender(); })),
     wkl ? null : el("label", { class: "bin-row" }, el("span", {}, tr("kolor napisu (wspólny z etykietami)")),
-      sel(state.labelTextColor || "#000000", COLOR_PALETTE.map(([h, nm]) => [h, tr(nm)]), v => { state.labelTextColor = v; save(); rerender(); })),
+      sel(state.labelTextColor || "#000000", filOpts(state.labelTextColor || "#000000"), v => { state.labelTextColor = v; save(); rerender(); })),
     el("p", { class: "hint" }, n > 1 ? tr("Przegródki od lewej, najpierw przedni rząd.") : null));
   for (let k = 0; k < n; k++) {
     const x = nap[k] || { t: "", s: "" }, polys = x.s && typeof labSymPolys === "function" ? labSymPolys(x.s) : null;
@@ -830,24 +838,35 @@ function renderBins(box) {
       el("p", { class: "hint" }, tr("Aktualizacja z programu albo ponowne uruchomienie instalatora doinstaluje ją sama.")));
     return;
   }
-  const sets = binSets(), set = binSet(), t = set.t, [gc, gr] = binGridSize(t);
+  const sets = binSets();
+  // zakres zakładek: egzemplarze wybranego zestawu i jego układy własne; układy usuniętych szuflad – tylko w „Całym projekcie”
+  {
+    const all = new Set(binInstances().map(i => i.key));
+    const ok = s => all.has(s.key) ? inScope(s.key) : s.key.startsWith("m:") ? inScope(null, s.st) : scopeAll();
+    const keysIn = [...binInstances().filter(i => inScope(i.key)).map(i => i.key), ...sets.filter(s => !all.has(s.key) && ok(s)).map(s => s.key)];
+    if (!keysIn.includes(state.binCur)) state.binCur = keysIn[0] || binNewManual(undefined, scopeTag());
+  }
+  const set = binSet(), t = set.t, [gc, gr] = binGridSize(t);
   if (BIN.sel >= set.items.length) BIN.sel = -1;
   const rerender = () => renderBins(box);
   const setT = (k, v) => { t[k] = v; set.t = binTargetFix(t); BIN.sel = -1; save(); rerender(); };
-  const inst = binInstances(), instMap = new Map(inst.map(i => [i.key, i]));
+  const instAll = binInstances(), instMap = new Map(instAll.map(i => [i.key, i])), inst = instAll.filter(i => inScope(i.key));
   const cur = instMap.get(set.key), manual = set.key.startsWith("m:"), orphan = !cur && !manual;
   const count = k => { const s = sets.find(x => x.key === k); return s ? s.items.length : 0; };
 
   // wybór: szuflady i skrzynki z projektu (każda osobno), układy własne, układy szuflad usuniętych z projektu
   const opts = [...inst.map(i => [i.key, i.label + " – " + tr("{n} poj.", { n: count(i.key) })]),
-    ...sets.filter(s => !instMap.has(s.key) && (s.key.startsWith("m:") || s.items.length)).map(s => [s.key, binSetLabel(s, instMap) + " – " + tr("{n} poj.", { n: s.items.length })]),
+    ...sets.filter(s => !instMap.has(s.key) && (s.key.startsWith("m:") ? inScope(null, s.st) : s.items.length && scopeAll()))
+      .map(s => [s.key, binSetLabel(s, instMap) + " – " + tr("{n} poj.", { n: s.items.length })]),
     ["+", tr("+ własny układ (szuflada spoza projektu)")]];
   // kopiowanie tylko z układów o tej samej siatce płyty (prośba użytkownika: „tylko pasujące warianty”)
   const others = sets.filter(s => s !== set && s.items.length && binGridSize(s.t).join() === binGridSize(t).join());
   const head = el("div", { class: "bin-target" },
-    inst.length ? null : el("p", { class: "welcome" }, tr("Żadna szuflada ani skrzynka w projekcie nie ma jeszcze wkładu gridfinity. Ustaw „Wkład” w szufladzie albo „wkład gridfinity” w skrzynce (edytor zestawu) – każda z nich dostanie tu własny układ pojemników. Poniżej możesz też zaprojektować układ dla szuflady spoza projektu.")),
+    inst.length ? null : el("p", { class: "welcome" }, scopeAll()
+      ? tr("Żadna szuflada ani skrzynka w projekcie nie ma jeszcze wkładu gridfinity. Ustaw „Wkład” w szufladzie albo „wkład gridfinity” w skrzynce (edytor zestawu) – każda z nich dostanie tu własny układ pojemników. Poniżej możesz też zaprojektować układ dla szuflady spoza projektu.")
+      : tr("Żadna szuflada ani skrzynka w zestawie „{name}” nie ma jeszcze wkładu gridfinity. Ustaw „Wkład” w szufladzie albo „wkład gridfinity” w skrzynce (edytor zestawu) – każda z nich dostanie tu własny układ pojemników. Poniżej możesz też zaprojektować układ dla szuflady spoza projektu.", { name: state.stacks[state.current].name })),
     el("label", { class: "bin-choose" }, el("b", {}, tr("Szuflada / skrzynka")),
-      sel(set.key, opts, v => { state.binCur = v === "+" ? binNewManual(set.t) : v; BIN.sel = -1; save(); rerender(); })),
+      sel(set.key, opts, v => { state.binCur = v === "+" ? binNewManual(set.t, scopeTag()) : v; BIN.sel = -1; save(); rerender(); })),
     manual ? el("div", { class: "row" },
       sel(t.typ, [["d", tr("szuflada")], ["s", tr("skrzynka")]], v => setT("typ", v)),
       sel(t.fam, ["S", "M", "L", "XL"].map(f => [f, f]), v => setT("fam", v)),
