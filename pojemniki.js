@@ -298,7 +298,7 @@ function binAskMeta(file) {
     try {
       const r = await api("/api/pojemnik/meta", { bins: files.map(f => BIN_GEN.get(f)) });
       r.meta.forEach((m, i) => BIN_META.set(files[i], m));
-      if (GLOW.open) render(); else renderResult();  // otwarty formularz wkładu na głowice – „nie mieści się” w edytorze
+      glowKeepFocus(); if (GLOW.open) render(); else renderResult();  // otwarty formularz wkładu na głowice – „nie mieści się” w edytorze
     } catch (e) { files.forEach(f => BIN_ASK.delete(f)); console.warn("pojemniki – opis", e); }
   }, 100);
 }
@@ -657,10 +657,17 @@ function binGlowForm(it, q, rerender) {
   return glowSlotsBox(q, rerender, e && e.meta && e.meta.nofit, tr("Gniazda na głowice"),
     tr("Głowice leżą czubkiem do przodu, przed czubkiem napis (np. rozmiar dyszy). Głębokość co najmniej 2 kratki; 3 kratki wszerz mieszczą 6 standardowych albo 7 indukcyjnych."));
 }
+// przed przerysowaniem: czy kursor jest w polu napisu gniazda (glowSlotsBox przywróci go w nowym polu)
+function glowKeepFocus() {
+  const a = document.activeElement;
+  BIN.glowFocus = a && a.classList && a.classList.contains("bin-glow") ? [a.dataset.k, a.selectionStart, a.selectionEnd] : null;
+}
 // lista gniazd (pojemnik i wkład na całe pudełko): rodzaj i napis każdego gniazda, skarpety, styl i kolor napisów
 function glowSlotsBox(q, rerender, nofit, title, hint, ver = BIN_GLOW_VER) {
-  const a = document.activeElement, pisze = a && a.classList && a.classList.contains("bin-glow")
-    ? [a.dataset.k, a.selectionStart, a.selectionEnd] : null;
+  // kursor w polu napisu: zapamiętany przy pisaniu (w edytorze zestawu stare pole znika, zanim powstanie nowe – zgłoszenie
+  // użytkownika 2026-11-07: „każda litera przenosi fokus”), przywracany po przerysowaniu
+  const pisze = BIN.glowFocus;
+  BIN.glowFocus = null;
   const [g, s] = binGlowice(q);
   const put = () => { q.glowice = g; q.skarpety = s; save(); rerender(); };
   const RODZ = [["std", tr("standardowa (H2D, H2S, P2S, X2D)")], ["ind", tr("indukcyjna (H2C)")]];
@@ -671,7 +678,8 @@ function glowSlotsBox(q, rerender, nofit, title, hint, ver = BIN_GLOW_VER) {
     box.append(el("p", { class: "err" }, tr("Pojemniki na głowice wymagają nowszego serwera – zamknij okno konfiguratora i uruchom go ponownie.")));
   g.forEach((x, i) => {
     const inp = el("input", { type: "text", class: "bin-glow", "data-k": i, maxlength: 12, placeholder: tr("napis"), style: "width:70px",
-      oninput: ev => { q.glowice = g; g[i].t = ev.target.value; save(); clearTimeout(BIN.napT); BIN.napT = setTimeout(rerender, 500); } });
+      oninput: ev => { q.glowice = g; g[i].t = ev.target.value; save(); clearTimeout(BIN.napT);
+        BIN.napT = setTimeout(() => { glowKeepFocus(); rerender(); }, 500); } });
     inp.value = x.t;
     box.append(el("div", { class: "row" }, el("span", { class: "q" }, String(i + 1)),
       sel(x.r, RODZ, v => { g[i].r = v; put(); }), inp,
