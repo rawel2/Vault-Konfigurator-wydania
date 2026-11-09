@@ -36,7 +36,8 @@ const krTemplates = () => [
 
 function krFromTemplate(t) {
   // numer domyślnej nazwy: zestaw zastąpi nietknięty jedyny „Zestaw 1” albo dojdzie jako kolejny; szablon – jego nazwa
-  const st = newStack(state.stacks.length + (krPristine(cur()) && state.stacks.length === 1 ? 0 : 1));
+  const repl = krPristine(cur()) && state.stacks.length === 1;
+  const st = newStack(freeStackNo(state.stacks.length + (repl ? 0 : 1), repl ? cur() : null));
   if (t.id !== "empty") st.name = t.name;
   st.depth = t.depth; st.roof = t.roof; st.topHandle = !!t.topHandle;
   Object.assign(st.mods, t.mods);

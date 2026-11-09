@@ -852,6 +852,9 @@ function vizStack(m, S, st, si, x0, P) {
           // dno pudełka 3 mm (pomiar wszystkich rozmiarów S/M/L 2026-11-05 – do tej pory przyjęte 2 mm: przegródki stały 1 mm
           // w dnie, które przebijało cienką krawędź stopy – zrzut użytkownika; płyta i pojemniki też o 1 mm za nisko)
           const DNO = 3;
+          // płyta gridfinity USSA wsunięta przodem w szczelinę przedniej ścianki pudełka (tuż nad dnem, 4 mm wysoka, do 0,92–0,97 mm
+          // od przodu – pomiar S4/S6/M3/L7 2026-11-09); do tej pory 4,9 mm – płyta i pojemniki stały ~4 mm za daleko z tyłu
+          const PLYTA_PRZOD = 0.95;
           const pudlo = (dx = 0) => grp(sd + dx, 0, EX * 0.35 + pull);  // pudełko w pół drogi do frontu
           pudlo();
           const bxr = bxf && stl(boxRx, boxCfg, [ca, fy0 + BOX_UP, -D], [cb, fy1, 0], P.box, bxf);
@@ -867,18 +870,25 @@ function vizStack(m, S, st, si, x0, P) {
               if (bl) gridXL(k => R`^01\. drawers/[^/]+/xl${d}/gridfinity baseplate/xl${d} baseplate${k}\.stl$`, 2,
                 ca, cb, fy0 + BOX_UP + DNO, -bl[2], 0, insertCol, bxf);
             }
-            if (insGrid(ins) && fw !== "xl") {
+            // płyta gridfinity w dnie pudełka (pudelka.py, wkład „gridbox”): sama płyta z serwera w układzie pliku pudełka USSA,
+            // ta sama macierz co pudełko (otworów w dnie i zalanych otworów na piny w tej skali nie widać)
+            if (ins === "gridbox" && fw !== "xl" && SERVER.ok && (SERVER.pojemnikiWer || 1) >= BOX_GEN_VER && typeof boxGen === "function") {
+              const gb = boxGen(fams[ci], d, h, ins);
+              const pe = gb && vizStlGetGen(boxGenFile(gb) + "#plyta", { ...gb, widok: "plyta" });
+              if (pe && pe.status === "ok") S.parts.push({ e: pe, M: bxr.M, col: P.box, group: "pudelka" });
+            }
+            if (insGrid(ins) && ins !== "gridbox" && fw !== "xl") {
               const base = R`^01\. drawers/[^/]+/${fw}${d}/gridfinity baseplate/${fw}${d} baseplate\.stl$`;
               const rx = ins === "grid2" ? R`^01\. drawers/[^/]+/${fw}${d}/gridfinity baseplate/${fw}${d} (baseplate_with 2 handles|gridfinity baseplate 2_handles)\.stl$`
                 : ins === "grid1" ? R`^01\. drawers/[^/]+/${fw}${d}/gridfinity baseplate/${fw}${d} baseplate_with 1 handle\.stl$` : base;
-              stl(vizStlFile(rx) ? rx : base, CF.box, [ca, fy0 + BOX_UP + DNO, -D], [cb, fy0 + BOX_UP + DNO, -4.9], insertCol, bxf);
+              stl(vizStlFile(rx) ? rx : base, CF.box, [ca, fy0 + BOX_UP + DNO, -D], [cb, fy0 + BOX_UP + DNO, -PLYTA_PRZOD], insertCol, bxf);
             }
             // pojemniki gridfinity z układu tej szuflady (pojemniki.js, klucz egzemplarza) – na płycie (42·d + 8 mm, przodem
-            // 4,9 mm za frontem; przekazywany środek płyty, kieszenie względem niego przesuwa binGridOff; XL – środek pudełka)
+            // PLYTA_PRZOD za przodem pudełka; przekazywany środek płyty, kieszenie względem niego przesuwa binGridOff; XL – środek pudełka)
             if (insGrid(ins) && S.V.stl && typeof binVizParts === "function") {
               const bl = fw === "xl" && stlSize(boxRx, boxCfg);
               binVizParts(S, `i:${st.id}:${l.id}:${ci}:${k}`, { typ: "d", fam: fams[ci], d, h, plyta: ins }, (ca + cb) / 2, fy0 + BOX_UP + DNO,
-                fw === "xl" ? (bl ? -bl[2] / 2 : null) : -4.9 - (42 * d + 8) / 2, off(bxf), binsOn(P.box, insertCol));
+                fw === "xl" ? (bl ? -bl[2] / 2 : null) : -PLYTA_PRZOD - (42 * d + 8) / 2, off(bxf), binsOn(P.box, insertCol));
             }
             // wkład na głowice na całe pudełko S (pojemniki.js – glowParams): na dnie, ścianki boczne 4,2 mm, przednia 6,6, tylna 3,
             // luz 0,5 mm; w pliku X – szerokość, Y+ – tył, Z – wysokość (CF.gdA0)
@@ -2001,6 +2011,9 @@ function openViz(dock) {
     });
   };
 
+  // kształty z plików STL (i kolor kliknięciem) – tylko z serwerem konfiguratora; w wersji online i z pliku – bryły poglądowe
+  const stlOk = location.protocol !== "file:" && !WEB;
+  if (!stlOk) V.paint = false;
   function renderBar() {
     const tog = (k, text) => el("button", { class: "small" + (V[k] ? " on" : ""), onclick: () => {
       V[k] = !V[k]; save(); geo = true; renderBar();
@@ -2031,11 +2044,13 @@ function openViz(dock) {
             oninput: e => { V.explode = +e.target.value; save(); geo = true; },
             onchange: () => setTimeout(() => fit(false)) }))),
       el("span", { class: "viz-group" }, tog("rotate", tr("Obracaj")), tog("labels", tr("Etykiety")), tog("dims", tr("Wymiary")), tog("packed", tr("Złożone")),
-        location.protocol !== "file:" && !WEB ? tog("stl", tr("Kształty z plików STL")) : null,
+        stlOk ? tog("stl", tr("Kształty z plików STL")) : null,
         state.stacks.length > 1 ? tog("all", tr("Wszystkie zestawy")) : null, badge),
       el("span", { class: "viz-group" }, tr("Kolory:") + " ",
-        el("button", { class: "small" + (V.paint ? " on" : ""), title: tr("Kliknij część w widoku, żeby wybrać kolor jej grupy (moduły, fronty, pudełka…)"),
-          onclick: () => { V.paint = !V.paint; paintClose(); save(); geo = true; renderBar(); } }, "🎨 " + tr("Kolor kliknięciem")),
+        // kolor kliknięciem potrzebuje kształtów z plików STL – w wersji online i z pliku na dysku ich nie ma (zgłoszenie
+        // użytkownika 2026-11-07: na github.io komunikat kazał włączyć nieistniejący przełącznik)
+        stlOk ? el("button", { class: "small" + (V.paint ? " on" : ""), title: tr("Kliknij część w widoku, żeby wybrać kolor jej grupy (moduły, fronty, pudełka…)"),
+          onclick: () => { V.paint = !V.paint; paintClose(); save(); geo = true; renderBar(); } }, "🎨 " + tr("Kolor kliknięciem")) : null,
         sel(V.palette, palettes, v => { V.palette = v; if (VIZ_PALETTES[v]) Object.assign(V, VIZ_PALETTES[v]); if (v === "druk") Object.assign(V, vizPrintColors()); save(); geo = true; renderBar(); }),
         ...Object.keys(VIZ_GROUP_ROLE).map(color)),
       el("span", { class: "viz-group", style: "margin-left:auto" },

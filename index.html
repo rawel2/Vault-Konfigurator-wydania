@@ -432,6 +432,7 @@ td.est.geom { color: var(--muted); }
     </select>
   </label>
   <label class="field" data-tr-title="Wyłącz, jeśli etykiet nie drukujesz albo robisz je w zakładce „Etykiety” (te zostają na liście)."><input type="checkbox" id="optLabels"> <span data-tr>puste etykiety (Label) na liście części</span></label>
+  <label class="field" data-tr-title="Pudełko z Twojej biblioteki z zalanymi otworami na piny przegródek – tylko szuflady S, M i L bez przegródek Grid Dividers. Konfigurator tworzy je przy przygotowaniu wydruku (tylko na własny użytek)."><input type="checkbox" id="optNoHoles"> <span data-tr>pudełka szuflad bez otworów na piny (gdy bez przegródek)</span></label>
   <label class="field" data-tr-title="1.0 = Bambu Lab H2S, basic settings (wg arkusza USSA). Wolniejsza drukarka/profil → większa wartość."><span data-tr>Mnożnik czasu:</span>
     <input type="number" id="optSpeed" min="0.2" max="5" step="0.1" style="width:64px">
   </label>
@@ -522,7 +523,7 @@ td.est.geom { color: var(--muted); }
   <a href="https://github.com/rawel2/Vault-Konfigurator-wydania/releases/latest" target="_blank" rel="noopener" data-tr>Instrukcja i aktualizacje</a>
 </footer>
 
-<script>window.VAULT_WEB = {"wersja": "1.1.41", "commit": "4766283"};</script>
+<script>window.VAULT_WEB = {"wersja": "1.1.42", "commit": "081aa6e"};</script>
 <script>
   // pliki z danymi zmieniają się po skanowaniu – wczytuj je zawsze świeże (bez pamięci podręcznej przeglądarki)
   for (const f of ["katalog.js", "dane_druku.js", "drukarki.js", "tlumaczenia.js"])
@@ -732,6 +733,12 @@ const STORE = "vault-konfigurator-v1";
 let uid = 1;
 const newCol = h => ({ pattern: [h], insert: "none", sInt: "flat", div: { n: 0, w: 0, d: 0, s: 0, sc: 0, ss: 0 } });
 const newLayer = (type = "D", layout = "S", height = 1) => ({ id: uid++, type, layout, height, cols: FAMILIES[layout].map(() => newCol(height)) });
+// pierwszy wolny numer domyślnej nazwy „Zestaw n” od n (zgłoszenie użytkownika 2026-11-07: po usunięciu „Zestawu 1” nowy
+// zestaw dostawał numer liczba zestawów + 1 – dwa „Zestaw 2”); except – zestaw, który zostanie zastąpiony (kreator)
+function freeStackNo(n, except) {
+  while (state.stacks.some(s => s !== except && s.name === tr("Zestaw {n}", { n }))) n++;
+  return n;
+}
 const newStack = n => ({
   id: uid++, name: tr("Zestaw {n}", { n }), qty: 1, depth: 3, layers: [newLayer()],
   roof: "grid", topHandle: false,
@@ -921,10 +928,27 @@ const HW = {
   insert: "Wkładka gwintowana M6 × 8 × 8 (heat insert)", bearing: "Łożysko 6205ZZ (25 × 52 × 15 mm)", scsaw: "Pierścień zaciskowy SCSAW 16 (16 × 35 × 10 mm)"
 };
 
+// Pudełka szuflad z pliku USSA zmienione na komputerze użytkownika (pudelka.py, zgoda USSA Design – tylko na własny użytek):
+// wkład „gridbox” – płyta gridfinity w dnie, z otworami w dnie pod kieszeniami; opcja „bez otworów na piny” (Ustawienia) –
+// zalane otwory na piny przegródek w szufladach bez Grid Dividers. XL – bez zmian (pudełko w pliku pod kątem).
+const BOX_GEN_VER = 34;  // pojemniki.WERSJA z pudelka.py – starszy serwer: zwykłe pudełko USSA (i płyta USSA zamiast płyty w dnie)
+function boxGen(fam, d, h, ins) {
+  if (SERVER.ok && (SERVER.pojemnikiWer || 1) < BOX_GEN_VER) return null;
+  if (fam === "XL" || !(ins === "gridbox" || (state.boxNoHoles && ins !== "dividers"))) return null;
+  const plik = findAll(R`^01\. drawers/[^/]+/${fam.toLowerCase()}${d}/boxes/${fam.toLowerCase()}${d} box ${h}f\.stl$`)[0];
+  return plik ? { typ: "pudelko", plik, plyta: ins === "gridbox" } : null;
+}
+// to samo co pudelka.nazwa w Pythonie
+const boxGenName = p => { const m = /\/([SML])(\d)\/Boxes\/[SML]\d Box (\d)F\.stl$/i.exec(p.plik); return `pudelko_${m[1].toUpperCase()}${m[2]}_${m[3]}F_` + (p.plyta ? "plyta" : "bez_otworow"); };
+const boxGenFile = p => { const f = "@pudelka/" + boxGenName(p) + ".stl"; if (typeof BIN_GEN !== "undefined") BIN_GEN.set(f, p); return f; };
+
 function addDrawer(b, m, fam, d, h, multiBox, where, k = 0) {
   const w = fam.toLowerCase(), G = "Szuflady", v = { fam, d, h };
   const PODPORY = "drukować z podporami", DWIE = "plik = 2 szt.";
+  // pudełko zmienione przez konfigurator (pudelka.py): płyta gridfinity w dnie albo zalane otwory na piny przegródek
+  const gb = boxGen(fam, d, h, insOf(where, k));
   if (fam === "XL") b.add(G, "XL{d} pudełko", R`^01\. drawers/[^/]+/xl${d}/boxes/[^/]+\.stl$`, m, { all: true, v });
+  else if (gb) b.addGen(G, tr(gb.plyta ? "{fam}{d} pudełko {h}F z płytą gridfinity w dnie" : "{fam}{d} pudełko {h}F bez otworów na piny", v), boxGenFile(gb), m, gb);
   else b.add(G, "{fam}{d} pudełko {h}F", R`^01\. drawers/[^/]+/${w}${d}/boxes/${w}${d} box ${h}f\.stl$`, m, { v });
   if (fam === "XL") b.add(G, "XL front 1F", R`^01\. drawers/05\. xl families/xl facade 1f\.stl$`, m);
   else b.add(G, "{fam} front {h}F", R`^01\. drawers/[^/]+/facades/${w}${h}f \(turn on supports\)\.stl$`, m, { note: PODPORY, v });
@@ -955,7 +979,7 @@ function addDrawer(b, m, fam, d, h, multiBox, where, k = 0) {
   b.add(G, "zaślepka frontu", R`^01\. drawers/07\. universal/facade cap\.stl$`, caps * m, { note: "S1F – 1 na front, M i L 2F/4F – 5, pozostałe – 3 (pogłębienia śrub poza etykietą)" });
   b.add(G, "etykieta", R`^01\. drawers/07\. universal/label\.stl$`, m);
   const ins = insOf(where, k);
-  if (insGrid(ins)) {
+  if (insGrid(ins) && !(ins === "gridbox" && gb)) {
     const base = R`^01\. drawers/[^/]+/${w}${d}/gridfinity baseplate/${w}${d} baseplate( part \d)?\.stl$`;
     let rx = base;
     if (ins === "grid2") rx = R`^01\. drawers/[^/]+/${w}${d}/gridfinity baseplate/${w}${d} (baseplate_with 2 handles|gridfinity baseplate 2_handles)\.stl$`;
@@ -1376,6 +1400,8 @@ function renderColumn(st, l, c, fam, ci) {
     const opts = [["none", tr("puste")], ["grid", "gridfinity baseplate"]];
     if (has("(with 2 handles|2_handles)")) opts.push(["grid2", tr("gridfinity z 2 uchwytami")]);
     if (has("with 1 handle")) opts.push(["grid1", tr("gridfinity z 1 uchwytem")]);
+    // płyta wtopiona w dno pudełka – jedna część, pod kieszeniami otwory w dnie (pudelka.py; XL – pudełko w pliku pod kątem)
+    if (fam !== "XL") opts.push(["gridbox", tr("gridfinity w dnie pudełka (jedna część)")]);
     // przegródki Grid Dividers w otworach dna (przegrodki.js) – zamiast płyty gridfinity, która zasłania otwory
     opts.push(["dividers", tr("przegródki Grid Dividers")]);
     // wkład na głowice Bambu na całe pudełko (glowice.py, pojemniki.js – glowPanel) – tylko szuflady S
@@ -1661,7 +1687,7 @@ function renderResult() {
         tb.append(el("tr", { class: "grp" }, el("td", { colspan: PL ? 5 : 4 }, tr(g)), el("td", { class: "q" }, PRINT ? `${fmtTime(gs[0])} · ${fmtG(gs[1])}` : "")));
       }
       const name = e.missing ? e.file.slice(1) : e.file.split("/").pop();
-      const path = e.missing ? tr("nie znaleziono pliku") : e.gen ? (e.file.startsWith("@przegrodki/") ? tr("generuje konfigurator (zakładka „Przegródki”)") : e.file.startsWith("@etykiety/") || e.file.startsWith("@logo/") ? tr("generuje konfigurator (zakładka „Etykiety”)") : tr("generuje konfigurator (zakładka „Pojemniki gridfinity”)")) : e.file.split("/").slice(0, -1).join(" / ");
+      const path = e.missing ? tr("nie znaleziono pliku") : e.gen ? (e.file.startsWith("@przegrodki/") ? tr("generuje konfigurator (zakładka „Przegródki”)") : e.file.startsWith("@pudelka/") ? tr("generuje konfigurator z pudełka USSA z Twojej biblioteki") : e.file.startsWith("@etykiety/") || e.file.startsWith("@logo/") ? tr("generuje konfigurator (zakładka „Etykiety”)") : tr("generuje konfigurator (zakładka „Pojemniki gridfinity”)")) : e.file.split("/").slice(0, -1).join(" / ");
       const d = doneOf(e), pc = PL ? plateCell(e, d) : null;
       if (pc && pc.stale) stale++;
       tb.append(el("tr", { class: e.missing ? "missing" : d >= e.qty ? "done" : "" },
@@ -2199,7 +2225,7 @@ const COLOR_GROUPS = [
   ["wklady", "wkłady gridfinity szuflad", /gridfinity|baseplate/],
   ["fronty_skrzynek", "fronty skrzynek", /^02\. sustainers\/.*facade|^@logo\/front_skrzynka/],
   ["fronty", "fronty szuflad, zaślepki i nakładki kluczyków", /facade|key cap|^@logo\/front_szuflada/],
-  ["pudelka", "pudełka szuflad i ślizgi", /\/boxes\/|runner slide/],
+  ["pudelka", "pudełka szuflad i ślizgi", /\/boxes\/|runner slide|^@pudelka\//],
   ["uchwyty", "kręgosłup, uchwyt wysuwany, stopka, uchwyt górny i rączka Heavyweight",
     /^03\. modifications\/(backbone|pull-out handle|feet)\/|wall mount second part|top handle|roof handle/],
   ["moduly", "moduły (obudowy szuflad i skrzynek) i prowadnice", /module|runner guide/],
@@ -2287,6 +2313,10 @@ function renderColors(parts) {
     ...rows);
 }
 
+// pochodne plików USSA tworzone lokalnie – zgoda USSA Design (2026-11) pod warunkiem użytku osobistego
+const personalUse = () => el("p", { class: "hint personal-use" }, "ⓘ " + tr("Części tworzone z plików USSA (etykiety z napisem, fronty z logo, zmienione pudełka szuflad, naprawione siatki) są tylko na Twój własny użytek – nie udostępniaj ich ani nie sprzedawaj."));
+const isDerived = f => /^@(etykiety|logo|pudelka)\//.test(f || "");
+
 function renderJob(box, parts) {
   const j = state.job, setj = k => v => { j[k] = v; save(); renderResult(); };
   const ok = parts.filter(e => !e.missing && jobQty(e) > 0), pieces = ok.reduce((n, e) => n + jobQty(e), 0);
@@ -2315,6 +2345,7 @@ function renderJob(box, parts) {
     // puste etykiety wyłączone, a etykiet z napisem nie tyle, ile frontów – widoczne tuż przed wydrukiem
     typeof labMismatch === "function" && labMismatch() ? el("p", { class: "err" }, "⚠ " + labMismatch() + " ",
       el("button", { class: "small", onclick: () => { state.tab = "labels"; update(); } }, tr("Etykiety"))) : null,
+    ok.some(e => isDerived(e.file)) ? personalUse() : null,
     el("div", { class: "row" }, tr("Odstęp między częściami:") + " ", num(j.gap, setj("gap"), 0), " mm"),
     el("div", { class: "row" }, chk(j.copy, tr("skopiuj pliki STL do folderu do_druku"), setj("copy")),
       chk(j.make3mf, tr("utwórz płyty 3MF z rozmieszczonymi częściami"), setj("make3mf"))),
@@ -2383,7 +2414,7 @@ function download(blob, name) {
 }
 
 // ---------- Zdarzenia ----------
-$("btnAddStack").onclick = () => { state.stacks.push(newStack(state.stacks.length + 1)); state.current = state.stacks.length - 1; update(); };
+$("btnAddStack").onclick = () => { state.stacks.push(newStack(freeStackNo(state.stacks.length + 1))); state.current = state.stacks.length - 1; update(); };
 $("btnDupStack").onclick = () => {
   const o = cur(), c = JSON.parse(JSON.stringify(o)); c.id = uid++; c.name += " " + tr("(kopia)"); c.layers.forEach(l => l.id = uid++);
   if (typeof binCopyLayouts === "function") c.layers.forEach((l, j) => binCopyLayouts(`i:${o.id}:${o.layers[j].id}:`, `i:${c.id}:${l.id}:`));
@@ -2424,6 +2455,7 @@ $("optKey").onchange = e => { state.key = e.target.value; update(); };
 $("optKeyPrint").onchange = e => { state.keyPrint = e.target.checked; update(); };
 $("optRails").onchange = e => { state.rails = e.target.value; update(); };
 $("optLabels").onchange = e => { state.blankLabels = e.target.checked; update(); };
+$("optNoHoles").onchange = e => { state.boxNoHoles = e.target.checked; update(); };
 $("optSpeed").onchange = e => { state.speed = Math.min(5, Math.max(0.2, parseFloat(e.target.value) || 1)); update(); };
 $("optPrice").onchange = e => { state.price = Math.max(0, parseFloat(e.target.value) || 0); update(); };
 document.querySelectorAll(".tabs button[data-tab]").forEach(btn => btn.onclick = () => { state.tab = btn.dataset.tab; update(); });
@@ -2512,7 +2544,8 @@ function render() {
   $("optLang").value = state.lang || "auto";
   $("optTheme").value = state.theme || "auto"; applyTheme();
   $("optKey").value = state.key; $("optRails").value = state.rails; $("optLabels").checked = state.blankLabels !== false;
-  $("optKeyPrint").checked = state.keyPrint !== false;  // brak pola (starsze projekty) = drukuj
+  $("optKeyPrint").checked = state.keyPrint !== false;
+  $("optNoHoles").checked = !!state.boxNoHoles;  // brak pola (starsze projekty) = drukuj
   $("optKeyPrintRow").style.display = state.key === "hidden" ? "" : "none";  // .field ma display: flex – atrybut hidden nie działa
   $("optSpeed").value = state.speed; $("optPrice").value = state.price;
   document.querySelector("main").classList.toggle("side-off", !!state.sideOff);

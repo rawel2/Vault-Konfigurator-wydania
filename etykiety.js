@@ -62,7 +62,9 @@ function labName(q) {
   return n + dn + "_" + labFnv(`${q.rodzaj}|${q.tekst}|${q.symbol}|${q.h.toFixed(2)}` + dh).slice(0, 6);
 }
 // kolor liter etykiety wpuszczonej (osobna część – w projekcie Bambu Studio własny filament), jeden dla wszystkich etykiet
-const labTextColor = q => q.styl === "wpuszczony" || (q.typ !== "etykieta" && q.typ !== "plyta" && Array.isArray(q.napisy) && q.napisy.length && q.styl_napisu !== "wklesly") ? { text_color: state.labelTextColor || "#000000", text_color_name: colorName(state.labelTextColor || "#000000") } : {};
+// kolor napisu: wpuszczone – druga część obiektu; wypukłe – zmiana filamentu na pierwszej warstwie napisu w projekcie Bambu
+// Studio (druk.gcode_warstw); napisy na półkach pojemników
+const labTextColor = q => q.styl === "wpuszczony" || (q.typ === "etykieta" && q.styl === "wypukly") || (q.typ !== "etykieta" && q.typ !== "plyta" && Array.isArray(q.napisy) && q.napisy.length && q.styl_napisu !== "wklesly") ? { text_color: state.labelTextColor || "#000000", text_color_name: colorName(state.labelTextColor || "#000000") } : {};
 const labFileOf = q => { const f = LAB_FILE + labName(q) + ".stl"; BIN_GEN.set(f, q); return f; };
 const labEmpty = l => !String(l.tekst || "").trim() && !l.symbol;
 
@@ -267,7 +269,7 @@ function renderLabels(box) {
     LAB.picker ? labPicker(q.symbol, k => { cur.symbol = k; LAB.picker = false; rerender(); }) : null,
     row(tr("styl napisu"), sel(q.styl, [["wypukly", tr("wypukły – druk licem do góry")], ["wklesly", tr("wklęsły – druk licem do stołu")],
       ["wpuszczony", tr("wpuszczony – drugi filament, druk licem do stołu")]], ch("styl"))),
-    q.styl === "wpuszczony" ? row(tr("kolor napisu (wszystkie wpuszczone)"), sel(state.labelTextColor || "#000000", filOpts(state.labelTextColor || "#000000"),
+    q.styl !== "wklesly" ? row(tr("kolor napisu (wspólny dla etykiet)"), sel(state.labelTextColor || "#000000", filOpts(state.labelTextColor || "#000000"),
       v => { state.labelTextColor = v; rerender(); })) : null,
     row(q.styl === "wypukly" ? tr("wysokość napisu") : q.styl === "wklesly" ? tr("głębokość napisu") : tr("grubość napisu"),
       sel(String(q.h), (q.styl === "wypukly" ? ["0.4", "0.6", "0.8"] : ["0.4", "0.6"])
@@ -282,7 +284,7 @@ function renderLabels(box) {
     v.status === "ok" ? el("p", { class: "hint" }, q.styl === "wklesly"
       ? tr("Widok jak we froncie. Wysokość liter: {h} mm. Napis wycięty na {z} mm w licu; plik leży licem do stołu – gładkie lico i ostre krawędzie liter (jeden kolor).",
         { h: v.r.letter.toLocaleString(locale()), z: q.h.toLocaleString(locale()) })
-      : tr("Widok jak we froncie. Wysokość liter: {h} mm. Napis {z} mm nad etykietą – w slicerze zmień filament na warstwie od {t} mm (drugi kolor napisu).",
+      : tr("Widok jak we froncie. Wysokość liter: {h} mm. Napis {z} mm nad etykietą – w projekcie Bambu Studio filament zmienia się sam na warstwie od {t} mm (kolor napisu, gdy inny niż kolor etykiety); w innym slicerze zmień go ręcznie.",
         { h: v.r.letter.toLocaleString(locale()), z: q.h.toLocaleString(locale()), t: v.r.top.toLocaleString(locale(), { minimumFractionDigits: 1 }) })) : null,
     ...(v.status === "ok" ? v.r.warnings.map(w => el("p", { class: "err" }, tr(w))) : []));
   // pobieranie i lista części
@@ -300,7 +302,7 @@ function renderLabels(box) {
       { name: tr("etykiety"), bins: wszystkie.map(l => ({ p: labParams(l), qty: +l.qty })) }, tr("etykiety") + ".zip") }, tr("Pliki STL (ZIP)")),
     el("button", { disabled: labEmpty(cur), onclick: () => binPost("/api/pojemnik/stl", q, q.styl === "wpuszczony" ? null : labName(q) + ".stl") }, tr("STL tej etykiety")));
   box.replaceChildren(el("div", { class: "bin-wrap" },
-    el("div", { class: "bin-left" }, el("h3", {}, tr("Etykiety z napisem")), list, tools, blankNote, form),
+    el("div", { class: "bin-left" }, el("h3", {}, tr("Etykiety z napisem")), personalUse(), list, tools, blankNote, form),
     el("div", { class: "bin-view" }, prev, dl,
       el("div", { class: "row lab-wrap" }, chk(state.labelsBom !== false, tr("na listę części – zamiast tylu samo pustych etykiet"), v => { state.labelsBom = v; rerender(); })),
       q.styl !== "wypukly" ? null : el("p", { class: "hint" }, tr("Etykieta to plik USSA z Twojej biblioteki (Label albo Label for Sustainers) z wypukłym napisem i symbolem. 3MF: wszystkie etykiety ułożone na płytach drukarki z „Przygotuj wydruk”. Drukuj licem do góry; drugi kolor – zmiana filamentu na wysokości wierzchu etykiety.")))),

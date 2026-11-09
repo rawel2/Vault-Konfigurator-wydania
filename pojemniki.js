@@ -37,7 +37,7 @@ function binTargetFix(t) {
   t.d = Math.max(3, Math.min(7, parseInt(t.d) || 4));
   t.h = [1, 2, 4].includes(+t.h) ? +t.h : 1;
   if (t.fam === "XL") t.h = 1;  // XL tylko 1F
-  const plyty = binPlates(t).map(([v]) => v);
+  const plyty = binPlatesAll(t).map(([v]) => v);
   if (!plyty.includes(t.plyta)) t.plyta = plyty[0];
   return t;
 }
@@ -47,9 +47,12 @@ function binPlates(t) {
   if (t.fam === "M") return [["grid", tr("zwykła płyta")], ["grid2", tr("płyta z 2 uchwytami")]];
   return [["grid2", tr("płyta z uchwytami")]];
 }
-const binGridSize = t => [t.typ === "d" && t.plyta !== "grid" && (t.fam === "S" || t.fam === "M") ? BIN_COLS.d[t.fam] - 1 : BIN_COLS[t.typ][t.fam], t.d];
+// płyta gridfinity w dnie pudełka (pudelka.py, index.html – wkład „gridbox”): siatka jak zwykła płyta USSA (S 3, M 5, L 6
+// kratek, kieszenie 2 mm od tyłu), pojemniki stoją na dnie (profil płyty generowanej)
+const binPlatesAll = t => t.typ === "d" && t.fam !== "XL" ? [...binPlates(t), ["gridbox", tr("płyta w dnie pudełka")]] : binPlates(t);
+const binGridSize = t => [t.typ === "d" && t.plyta !== "grid" && t.plyta !== "gridbox" && (t.fam === "S" || t.fam === "M") ? BIN_COLS.d[t.fam] - 1 : BIN_COLS[t.typ][t.fam], t.d];
 const binCeil = t => BIN_ROOM[t.typ][t.h] - 0.5;  // najwyżej tu może sięgać wierzch pojemnika (mm nad dnem)
-const binSeat = t => t.seat == null ? 0.65 : t.seat;  // spód pojemnika nad dnem: płyta USSA 0,65, generowana 0 / 3 (magnesy)
+const binSeat = t => t.plyta === "gridbox" ? 0 : t.seat == null ? 0.65 : t.seat;  // spód pojemnika nad dnem: płyta USSA 0,65, generowana 0 / 3 (magnesy)
 const binMaxH = (t, rant) => Math.floor((binCeil(t) - binSeat(t) - (rant ? 4.4 : 0)) / 7);
 // obrys płyty USSA szuflady / skrzynki (pomiar plików 2026-11-01; XL szuflady – z bryły obróconego pliku) – taki ma też
 // płyta generowana: szuflady 42·d + 8 (XL + 9), skrzynki 42·d + 14,9
@@ -65,7 +68,7 @@ function binPlateParts(set, whole) {
   return out;
 }
 const binTargetLabel = t => tr(t.typ === "d" ? "szuflada {fam}{d} {h}F" : "skrzynka {fam}{d} {h}F", { fam: t.fam, d: t.d, h: t.h }) +
-  (t.typ === "d" && t.plyta !== "grid" && (t.fam === "S" || t.fam === "M") ? ", " + binPlates(t).find(([v]) => v === t.plyta)[1] : "");
+  (t.plyta === "gridbox" || t.typ === "d" && t.plyta !== "grid" && (t.fam === "S" || t.fam === "M") ? ", " + binPlatesAll(t).find(([v]) => v === t.plyta)[1] : "");
 const binTargetKey = t => [t.typ, t.fam, t.d, t.h, t.plyta].join("|");
 
 // szuflady z wkładem gridfinity i skrzynki z płytą w projekcie (ilość = zestawy × ich liczba)
@@ -183,10 +186,11 @@ function binNapisy(p) {
   while (n.length && !n[n.length - 1].t.trim() && !n[n.length - 1].s) n.pop();
   return n;
 }
-// pojemnik na głowice Bambu (glowice.py, 2026-11-07): gniazda [{ r: std|ind, t: napis }] i skarpety – jak glowice.parametry
+// pojemnik na głowice Bambu (glowice.py, 2026-11-07): gniazda [{ r: std|ind|h3c, t: napis }] i skarpety – jak glowice.parametry
 const BIN_GLOW_VER = 32;
+const BIN_H3C_VER = 35;  // gniazda H3C (glowice._h3c) – starszy serwer zrobiłby z nich gniazda standardowe
 function binGlowice(p) {
-  const g = (Array.isArray(p.glowice) ? p.glowice : []).slice(0, 40).map(x => ({ r: x && x.r === "ind" ? "ind" : "std", t: String((x && x.t) || "").slice(0, 12) }));
+  const g = (Array.isArray(p.glowice) ? p.glowice : []).slice(0, 40).map(x => ({ r: x && (x.r === "ind" || x.r === "h3c") ? x.r : "std", t: String((x && x.t) || "").slice(0, 12) }));
   const s = Math.max(0, Math.min(40, parseInt(p.skarpety, 10) || 0));
   return [g, s];
 }
@@ -426,7 +430,7 @@ function binRefresh() {
     top = Math.max(top, e.meta.size[2]);
   });
   const ussa = set.key.startsWith("m:") ? set.plate === "ussa" : true;
-  const plRx = ussa && t.fam !== "XL" && typeof vizStlFile === "function" ? binUssaPlateRx(t) : null, plFile = plRx && vizStlFile(plRx);
+  const plRx = ussa && t.fam !== "XL" && t.plyta !== "gridbox" && typeof vizStlFile === "function" ? binUssaPlateRx(t) : null, plFile = plRx && vizStlFile(plRx);
   if (plFile && SERVER.ok) {
     const e = vizStlGet(plFile);
     if (e.status === "ok") {
@@ -677,7 +681,8 @@ function glowSlotsBox(q, rerender, nofit, title, hint, ver = BIN_GLOW_VER) {
   BIN.glowFocus = null;
   const [g, s] = binGlowice(q);
   const put = () => { q.glowice = g; q.skarpety = s; save(); rerender(); };
-  const RODZ = [["std", tr("standardowa (H2D, H2S, P2S, X2D)")], ["ind", tr("indukcyjna (H2C)")]];
+  const h3c = (SERVER.pojemnikiWer || 1) >= BIN_H3C_VER;
+  const RODZ = [["std", tr("standardowa (H2D, H2S, P2S, X2D)")], ["ind", tr("indukcyjna (H2C)")], ...(h3c || g.some(x => x.r === "h3c") ? [["h3c", "H3C"]] : [])];
   nofit = nofit || [0, 0];
   const wkl = q.styl_napisu === "wklesly";
   const box = el("div", { class: "bin-nap-box" }, el("h3", {}, title), el("p", { class: "hint" }, hint));
@@ -694,7 +699,8 @@ function glowSlotsBox(q, rerender, nofit, title, hint, ver = BIN_GLOW_VER) {
   });
   box.append(el("div", { class: "row" },
     el("button", { class: "small", onclick: ev => { ev.preventDefault(); g.push({ r: "std", t: g.length ? g[g.length - 1].t : "0.4" }); put(); } }, tr("+ standardowa")),
-    el("button", { class: "small", onclick: ev => { ev.preventDefault(); g.push({ r: "ind", t: g.length ? g[g.length - 1].t : "0.4" }); put(); } }, tr("+ indukcyjna"))),
+    el("button", { class: "small", onclick: ev => { ev.preventDefault(); g.push({ r: "ind", t: g.length ? g[g.length - 1].t : "0.4" }); put(); } }, tr("+ indukcyjna")),
+    h3c ? el("button", { class: "small", onclick: ev => { ev.preventDefault(); g.push({ r: "h3c", t: g.length ? g[g.length - 1].t : "0.4" }); put(); } }, "+ H3C") : null),
     el("label", { class: "bin-row" }, el("span", {}, tr("gniazda na skarpety silikonowe")), num(s, v => { q.glowice = g; q.skarpety = v; save(); rerender(); }, 0, 40)));
   if (nofit[0] || nofit[1])
     box.append(el("p", { class: "err" }, tr("Nie mieści się: głowic {g}, skarpet {s} – powiększ pojemnik albo usuń gniazda.", { g: nofit[0], s: nofit[1] })));
@@ -872,7 +878,7 @@ function renderBins(box) {
       sel(t.fam, ["S", "M", "L", "XL"].map(f => [f, f]), v => setT("fam", v)),
       sel(t.d, [3, 4, 5, 6, 7].map(d => [d, String(d)]), v => setT("d", +v)),
       sel(t.h, (t.fam === "XL" ? [1] : [1, 2, 4]).map(h => [h, h + "F"]), v => setT("h", +v)),
-      binPlates(t).length > 1 && set.plate !== "gen" ? sel(t.plyta, binPlates(t), v => setT("plyta", v)) : null) : null,
+      binPlates(t).length > 1 && set.plate !== "gen" ? sel(t.plyta, binPlates(t), v => setT("plyta", v)) : null) : null,  // „gridbox” tylko z projektu
     el("div", { class: "hint" }, tr("Płyta {c} × {r} kratek · pojemniki do {h} jedn. wysokości (z rantem)", { c: gc, r: gr, h: binMaxH(t, true) })),
     cur ? chk(!set.off, tr("na listę części i do widoku 3D (× {n} – ilość zestawu)", { n: cur.qty }), v => { set.off = !v; save(); rerender(); }) : null,
     manual ? el("label", { class: "bin-row" }, el("span", {}, tr("ilość na liście części")), num(+set.qty || 0, v => { set.qty = v; save(); rerender(); }, 0, 999)) : null,
