@@ -288,6 +288,14 @@ a { color: inherit; }
 .extras-search { max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; margin: 6px 0; }
 .extras-search div { padding: 2px 6px; display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
 .extras-search div:hover { background: var(--chip); }
+.peg { margin-top: 8px; }
+.drawer .peg-item { margin-bottom: 4px; font-size: 13px; }
+.peg-set-list { margin: 2px 0 6px; padding-left: 18px; font-size: 13px; }
+.peg-prev { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.peg-prev figure { margin: 0; flex: 1 1 180px; max-width: 240px; }
+.peg-prev img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.peg-prev.small figure { position: relative; flex: 0 0 calc(25% - 6px); max-width: 120px; }
+.peg-prev.small .peg-ile { position: absolute; left: 4px; top: 2px; font-size: 12px; font-weight: 600; }
 fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin: 0 0 8px; }
 legend { color: var(--muted); font-size: 12px; }
 .err { color: var(--warn); font-weight: 600; }
@@ -442,6 +450,15 @@ td.est.geom { color: var(--muted); }
   <h3 data-tr>Instrukcje</h3>
   <div id="docsBox"></div>
 </aside>
+<!-- panel „Akcesoria pegboardu” (pegboard.js, od 2026-11-17) -->
+<aside id="pegDrawer" class="drawer" hidden aria-labelledby="pegTitle">
+  <div class="drawer-head">
+    <h2 id="pegTitle" data-tr>Akcesoria pegboardu</h2>
+    <button id="btnPegClose" class="small" data-tr-title="Zamknij"><span aria-hidden="true">✕</span></button>
+  </div>
+  <p class="hint" data-tr>Haczyki, pojemniki i uchwyty z paczki USSA PEGBOARD. Trafiają do „Dodatkowych plików” wybranego zestawu i na listę części.</p>
+  <div id="pegBody"></div>
+</aside>
 <!-- panel „Pomoc” (od 2026-11-03): kroki pracy z przejściem do miejsca, skróty, mysz w widoku 3D, zapis projektu -->
 <aside id="helpPanel" class="drawer" hidden aria-labelledby="helpTitle">
   <div class="drawer-head">
@@ -523,7 +540,7 @@ td.est.geom { color: var(--muted); }
   <a href="https://github.com/rawel2/Vault-Konfigurator-wydania/releases/latest" target="_blank" rel="noopener" data-tr>Instrukcja i aktualizacje</a>
 </footer>
 
-<script>window.VAULT_WEB = {"wersja": "1.1.42", "commit": "081aa6e"};</script>
+<script>window.VAULT_WEB = {"wersja": "1.1.43", "commit": "ab7932c"};</script>
 <script>
   // pliki z danymi zmieniają się po skanowaniu – wczytuj je zawsze świeże (bez pamięci podręcznej przeglądarki)
   for (const f of ["katalog.js", "dane_druku.js", "drukarki.js", "tlumaczenia.js"])
@@ -538,6 +555,7 @@ td.est.geom { color: var(--muted); }
 <script src="przegrodki.js"></script>
 <script src="etykiety.js"></script>
 <script src="logo.js"></script>
+<script src="pegboard.js"></script>
 <script src="skladanie.js"></script>
 <!-- kreator wieży: szablon, rozmiar, warstwy, góra i dodatki, podsumowanie (funkcje z poniższego skryptu – przy otwarciu) -->
 <script src="kreator.js"></script>
@@ -923,7 +941,7 @@ class Bom {
 
 const HW = {
   m4_10: "Śruba M4 × 10 mm", m4_14: "Śruba M4 × 14 mm", m4_20: "Śruba M4 × 20 mm", m4_25: "Śruba M4 × 25 mm",
-  m4_40: "Śruba M4 × 40 mm", m4_60: "Śruba M4 × 60 mm", m4_long: "Śruba M4 × 60–100 mm",
+  m3: "Śruba M3 (długość do dopasowania)", m4_40: "Śruba M4 × 40 mm", m4_60: "Śruba M4 × 60 mm", m4_long: "Śruba M4 × 60–100 mm",
   m6_30: "Śruba M6 × 30 mm (płaski łeb)", m6_35: "Śruba M6 × 35 mm (łeb sześciokątny)", m6_50: "Śruba M6 × 50 mm", m6_90: "Śruba M6 × 90 mm",
   insert: "Wkładka gwintowana M6 × 8 × 8 (heat insert)", bearing: "Łożysko 6205ZZ (25 × 52 × 15 mm)", scsaw: "Pierścień zaciskowy SCSAW 16 (16 × 35 × 10 mm)"
 };
@@ -1281,7 +1299,10 @@ function buildBom(full = false) {
   for (const e of state.extras) {
     if (!inScope(null, e.st)) continue;
     const n = norm(e.file);
-    b.add("Dodatkowe", e.file.split("/").pop(), new RegExp("^" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$"), e.qty, { raw: true });
+    // akcesoria pegboardu USSA (pegboard.js) – własna grupa i opis z rodzaju i rozmiaru; haczyk G – śruba M3
+    const peg = typeof pegLabel === "function" ? pegLabel(e.file) : null;
+    b.add(peg ? "Akcesoria pegboardu" : "Dodatkowe", peg || e.file.split("/").pop(), new RegExp("^" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$"), e.qty, { raw: true });
+    if (/^pegboard\/hooks\/g\.stl$/.test(n)) b.hwAdd(HW.m3, e.qty, "haczyk pegboardu G");
   }
   if (typeof binAddToBom === "function") binAddToBom(b);  // pojemniki gridfinity z układów (pojemniki.js)
   if (typeof gdAddToBom === "function") gdAddToBom(b);  // przegródki Grid Dividers z układów (przegrodki.js)
@@ -1541,7 +1562,8 @@ function renderEditor() {
       sel(md.backbone, [["none", tr("brak")], ["ded", tr("dedykowany {W}", { W })], ["uni", tr("uniwersalny")]], setm("backbone")),
       // pegboard przykręca się do kręgosłupa – bez niego wyszarzony, zapisany wybór czeka (jak koła bez podstawy)
       el("span", { title: bbOk ? "" : tr("Pegboard przykręca się do kręgosłupa – wybierz kręgosłup.") }, "Pegboard: ",
-        Object.assign(sel(bbOk ? md.pegboard : "none", [["none", tr("brak")], ["ikea", "IKEA Skådis"], ["ussa", "USSA"]], setm("pegboard")), { disabled: !bbOk }))),
+        Object.assign(sel(bbOk ? md.pegboard : "none", [["none", tr("brak")], ["ikea", "IKEA Skådis"], ["ussa", "USSA"]], setm("pegboard")), { disabled: !bbOk })),
+      typeof pegButton === "function" ? pegButton() : null),  // akcesoria pegboardu (pegboard.js)
     sust && md.backbone !== "none" ? el("p", { class: "hint" }, bbLayers(st)
       ? tr("Kręgosłup tylko na warstwach szuflad pod pierwszą skrzynką – zawiasy skrzynki wystają za moduł, a wieko odchyla się do tyłu razem z górą wieży.")
       : tr("Kręgosłup nie mieści się przy skrzynce na spodzie wieży – zawiasy skrzynki wystają za moduł; jest pomijany.")) : null,
@@ -1567,9 +1589,12 @@ function renderExtras() {
   const hidden = state.extras.filter(e => !inScope(null, e.st)).length;
   state.extras.forEach((e, i) => inScope(null, e.st) && box.append(el("div", { class: "row" },
     num(e.qty, v => { e.qty = v; update(); }, 1),
-    el("span", { title: e.file, style: "flex:1;font-size:12px" }, e.file.split("/").slice(-2).join(" / ")),
+    el("span", { title: e.file, style: "flex:1;font-size:12px" }, (typeof pegLabel === "function" && pegLabel(e.file)) || e.file.split("/").slice(-2).join(" / ")),
     el("button", { class: "small", title: tr("usuń"), onclick: () => { histBreak(); state.extras.splice(i, 1); update(); toast(tr("Usunięto plik z listy")); } }, "✕"))));
   if (hidden) box.append(el("p", { class: "hint" }, tr("Pliki innych zestawów i całego projektu: {n} – widać je w zakresie „Cały projekt”.", { n: hidden })));
+  const peg = typeof pegButton === "function" ? pegButton() : null;  // akcesoria pegboardu USSA (pegboard.js) – panel z prawej
+  if (peg) box.append(el("div", { class: "peg" }, peg));
+  if (typeof pegRender === "function") pegRender();
 }
 $("extraSearch").addEventListener("input", e => {
   const q = e.target.value.trim().toLowerCase().split(/\s+/).filter(Boolean), res = $("extraResults");
@@ -1587,7 +1612,7 @@ $("extraSearch").addEventListener("input", e => {
 });
 
 // ---------- Wynik ----------
-const GROUP_ORDER = ["Szuflady", "Wkłady", "Przegródki Grid Dividers", "Pojemniki gridfinity", "Etykiety z napisem", "Skrzynki", "Przegródki", "Dachy", "Modyfikacje", "Dodatkowe"];
+const GROUP_ORDER = ["Szuflady", "Wkłady", "Przegródki Grid Dividers", "Pojemniki gridfinity", "Etykiety z napisem", "Skrzynki", "Przegródki", "Dachy", "Modyfikacje", "Akcesoria pegboardu", "Dodatkowe"];
 function sortedParts(b) {
   const arr = [...b.parts.values()];
   for (const e of arr) e.group = GROUP_ORDER.find(g => e.groups.has(g)) || [...e.groups][0];
@@ -2231,7 +2256,7 @@ const COLOR_GROUPS = [
   ["moduly", "moduły (obudowy szuflad i skrzynek) i prowadnice", /module|runner guide/],
   ["wieka", "wieka skrzynek", /^02\. sustainers\/.*roof/],
   ["dachy", "dachy szuflad", /^01\. drawers\/.*roof/],
-  ["modyfikacje", "podstawa, koła, pegboard, uchwyt stały i ścienny", /^03\. modifications\//],
+  ["modyfikacje", "podstawa, koła, pegboard, uchwyt stały i ścienny", /^03\. modifications\/|^pegboard\//],  // + akcesoria pegboardu (pegboard.js)
   ["drobne", "drobne części (kluczyki, zamki, zawiasy, zatrzaski, sprężyny, listwy zębate)", /./],
 ];
 // kolory filamentu Bambu PLA Basic (wartości jak w Bambu Studio); nazwa idzie do nazwy płyty
@@ -2463,14 +2488,14 @@ $("btnCsv").onclick = exportCsv;
 // panel „Ustawienia” (z prawej) i menu „Projekt”; Esc i kliknięcie obok zamykają
 // panele z prawej (Ustawienia, Pomoc) – jeden naraz, wspólne przyciemnienie tła
 const openPanel = (id, on) => {
-  for (const p of ["settings", "helpPanel"]) $(p).hidden = !(on && p === id);
+  for (const p of ["settings", "helpPanel", "pegDrawer"]) $(p).hidden = !(on && p === id);
   $("setOverlay").hidden = !on;
   if (on) $(id).querySelector(".drawer-head button").focus();
 };
 const openSettings = on => openPanel("settings", on);
 $("btnSettings").onclick = () => { $("projMenu").open = false; openSettings(true); };
 $("btnHelp").onclick = () => { $("projMenu").open = false; openPanel("helpPanel", true); };
-$("btnSetClose").onclick = $("btnHelpClose").onclick = $("setOverlay").onclick = () => openPanel(null, false);
+$("btnSetClose").onclick = $("btnHelpClose").onclick = $("btnPegClose").onclick = $("setOverlay").onclick = () => openPanel(null, false);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("setOverlay").hidden) openPanel(null, false); });
 // przyciski „przejdź” w krokach pomocy
 document.querySelectorAll("#helpPanel [data-go]").forEach(b => b.onclick = () => {

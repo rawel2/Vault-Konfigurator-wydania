@@ -319,7 +319,11 @@ function krAfter(body) {
       el("div", { class: "row" },
         bins ? el("button", { class: "small", onclick: () => goTab("bins") }, tr("Pojemniki gridfinity") + " ›") : null,
         gds ? el("button", { class: "small", onclick: () => goTab("gd") }, tr("Przegródki") + " ›") : null),
-      bins || gds ? el("p", { class: "hint" }, tr("Edytory pojemników i przegródek są w zakładkach – przycisk zamyka przewodnik. Dalej poprowadzą przyciski „Następny krok” na dole zakładek.")) : null);
+      bins || gds ? el("p", { class: "hint" }, tr("Edytory pojemników i przegródek są w zakładkach – przycisk zamyka przewodnik. Dalej poprowadzą przyciski „Następny krok” na dole zakładek.")) : null,
+      // akcesoria pegboardu USSA – gotowe zestawy (pegboard.js), gdy paczka jest w bibliotece
+      typeof pegSetsBox === "function" && pegFiles().length ? el("h3", {}, tr("Akcesoria pegboardu")) : null,
+      typeof pegSetsBox === "function" && pegFiles().length ? pegSetsBox(() => krRender()) : null,
+      typeof pegSetsBox === "function" && pegFiles().length ? el("p", { class: "hint" }, tr("Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.")) : null);
   } else if (KR.step === 7) {
     const j = state.job, setj = k => v => { j[k] = v; rr(); };
     if (!PRINTERS[j.printer] && j.printer !== "custom") j.printer = "h2s";
