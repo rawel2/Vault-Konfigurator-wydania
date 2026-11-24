@@ -1182,7 +1182,17 @@ window.VAULT_I18N = {
 "Dodaj zestaw": "Add set",
 "Gotowe zestawy": "Ready sets",
 "Pojedynczo": "One by one",
-"Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.": "Single hooks and containers, with a preview – the “Pegboard accessories…” button in the set editor."
+"Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.": "Single hooks and containers, with a preview – the “Pegboard accessories…” button in the set editor.",
+"instrukcja, s. {p}": "manual, p. {p}",
+"łącznik pudełka XL (niski)": "XL box connector (short)",
+"łącznik pudełka XL (wysoki)": "XL box connector (tall)",
+"uchwyt górny wyższy": "top handle, taller",
+"wyższy (Taller)": "taller (Taller)",
+"{W} uchwyt wysuwany cz. 1": "{W} pull-out handle part 1",
+"{W} uchwyt wysuwany cz. 2": "{W} pull-out handle part 2",
+"wersja z wkładkami gwintowanymi; bez wkładek – plik „(No Heat Inserts)”": "version with heat inserts; without inserts – file “(No Heat Inserts)”",
+"nakładka boczna uchwytu wysuwanego": "pull-out handle front cover",
+"zaślepki górne uchwytu wysuwanego": "pull-out handle top covers"
 },
 "de": {
 "Język:": "Sprache:",
@@ -2363,7 +2373,17 @@ window.VAULT_I18N = {
 "Dodaj zestaw": "Set hinzufügen",
 "Gotowe zestawy": "Fertige Sets",
 "Pojedynczo": "Einzeln",
-"Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.": "Einzelne Haken und Behälter mit Vorschau – Schaltfläche „Pegboard-Zubehör…“ im Set-Editor."
+"Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.": "Einzelne Haken und Behälter mit Vorschau – Schaltfläche „Pegboard-Zubehör…“ im Set-Editor.",
+"instrukcja, s. {p}": "Anleitung, S. {p}",
+"łącznik pudełka XL (niski)": "XL-Box-Verbinder (kurz)",
+"łącznik pudełka XL (wysoki)": "XL-Box-Verbinder (hoch)",
+"uchwyt górny wyższy": "oberer Griff, höher",
+"wyższy (Taller)": "höher (Taller)",
+"{W} uchwyt wysuwany cz. 1": "{W} ausziehbarer Griff Teil 1",
+"{W} uchwyt wysuwany cz. 2": "{W} ausziehbarer Griff Teil 2",
+"wersja z wkładkami gwintowanymi; bez wkładek – plik „(No Heat Inserts)”": "Version mit Einsenkmuttern; ohne – Datei „(No Heat Inserts)“",
+"nakładka boczna uchwytu wysuwanego": "Seitenabdeckung des ausziehbaren Griffs",
+"zaślepki górne uchwytu wysuwanego": "obere Abdeckungen des ausziehbaren Griffs"
 },
 "zh": {
 "Język:": "语言：",
@@ -3544,7 +3564,17 @@ window.VAULT_I18N = {
 "Dodaj zestaw": "添加套装",
 "Gotowe zestawy": "现成套装",
 "Pojedynczo": "单件添加",
-"Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.": "单个挂钩和收纳盒（带预览）——组合编辑器中的“洞洞板配件…”按钮。"
+"Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.": "单个挂钩和收纳盒（带预览）——组合编辑器中的“洞洞板配件…”按钮。",
+"instrukcja, s. {p}": "说明书，第 {p} 页",
+"łącznik pudełka XL (niski)": "XL 抽屉盒连接件（矮）",
+"łącznik pudełka XL (wysoki)": "XL 抽屉盒连接件（高）",
+"uchwyt górny wyższy": "顶部提手（加高）",
+"wyższy (Taller)": "加高（Taller）",
+"{W} uchwyt wysuwany cz. 1": "{W} 拉杆把手 第 1 件",
+"{W} uchwyt wysuwany cz. 2": "{W} 拉杆把手 第 2 件",
+"wersja z wkładkami gwintowanymi; bez wkładek – plik „(No Heat Inserts)”": "带热熔螺母版本；不带螺母 – 文件“(No Heat Inserts)”",
+"nakładka boczna uchwytu wysuwanego": "拉杆把手侧盖",
+"zaślepki górne uchwytu wysuwanego": "拉杆把手顶盖"
 },
 "es": {
 "Język:": "Idioma:",
@@ -4725,7 +4755,17 @@ window.VAULT_I18N = {
 "Dodaj zestaw": "Añadir conjunto",
 "Gotowe zestawy": "Conjuntos listos",
 "Pojedynczo": "Uno a uno",
-"Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.": "Ganchos y contenedores sueltos, con vista previa – botón «Accesorios de pegboard…» en el editor del conjunto."
+"Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.": "Ganchos y contenedores sueltos, con vista previa – botón «Accesorios de pegboard…» en el editor del conjunto.",
+"instrukcja, s. {p}": "manual, p. {p}",
+"łącznik pudełka XL (niski)": "conector de caja XL (bajo)",
+"łącznik pudełka XL (wysoki)": "conector de caja XL (alto)",
+"uchwyt górny wyższy": "asa superior alta",
+"wyższy (Taller)": "más alta (Taller)",
+"{W} uchwyt wysuwany cz. 1": "{W} asa extraíble, parte 1",
+"{W} uchwyt wysuwany cz. 2": "{W} asa extraíble, parte 2",
+"wersja z wkładkami gwintowanymi; bez wkładek – plik „(No Heat Inserts)”": "versión con insertos térmicos; sin insertos – archivo «(No Heat Inserts)»",
+"nakładka boczna uchwytu wysuwanego": "tapa lateral del asa extraíble",
+"zaślepki górne uchwytu wysuwanego": "tapas superiores del asa extraíble"
 },
 "fr": {
 "Język:": "Langue :",
@@ -5906,6 +5946,16 @@ window.VAULT_I18N = {
 "Dodaj zestaw": "Ajouter l’ensemble",
 "Gotowe zestawy": "Ensembles prêts",
 "Pojedynczo": "À l’unité",
-"Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.": "Crochets et bacs à l’unité, avec aperçu – bouton « Accessoires de pegboard… » dans l’éditeur d’ensemble."
+"Pojedyncze haczyki i pojemniki, z podglądem – przycisk „Akcesoria pegboardu…” w edytorze zestawu.": "Crochets et bacs à l’unité, avec aperçu – bouton « Accessoires de pegboard… » dans l’éditeur d’ensemble.",
+"instrukcja, s. {p}": "notice, p. {p}",
+"łącznik pudełka XL (niski)": "connecteur de boîte XL (bas)",
+"łącznik pudełka XL (wysoki)": "connecteur de boîte XL (haut)",
+"uchwyt górny wyższy": "poignée supérieure haute",
+"wyższy (Taller)": "plus haute (Taller)",
+"{W} uchwyt wysuwany cz. 1": "poignée coulissante {W} partie 1",
+"{W} uchwyt wysuwany cz. 2": "poignée coulissante {W} partie 2",
+"wersja z wkładkami gwintowanymi; bez wkładek – plik „(No Heat Inserts)”": "version avec inserts filetés ; sans inserts – fichier « (No Heat Inserts) »",
+"nakładka boczna uchwytu wysuwanego": "cache latéral de poignée coulissante",
+"zaślepki górne uchwytu wysuwanego": "caches supérieurs de poignée coulissante"
 }
 };

@@ -679,7 +679,7 @@ function vizStack(m, S, st, si, x0, P) {
     const h = l.height;
     const modRx = (f, ci) => {
       const w = f.toLowerCase();
-      if (l.type === "S") return w === "s" || w === "m" ? R`^02\. sustainers/[^/]+/${w}${d}/modules/${w}${d} ${h}f module\.stl$`
+      if (l.type === "S") return w === "s" || w === "m" ? R`^02\. sustainers/[^/]+/${w}${d}/modules/${w}${d} ${h}f module(_sustainer)?\.stl$`
         : R`^02\. sustainers/[^/]+/${w}${d}/modules/${w}${d} ${h}f ${l.cols[ci].sInt} module\.stl$`;
       if (l.layout === "L2") return R`^01\. drawers/[^/]+/l${d}²/l${d}² module ${h}f\.stl$`;
       if (l.layout === "XL2") return R`^01\. drawers/[^/]+/xl${d}²/xl${d}² module ${h}f\.stl$`;
@@ -844,7 +844,7 @@ function vizStack(m, S, st, si, x0, P) {
           knob(mid, ky, kxf);  // zamek (Key Lock) – osobna część, także w otworze frontu z pliku
           // XL: w folderze Boxes są dwa pliki – pudełko i tylny panel (do 2026-11-01 wzorzec brał pierwszy, czyli panel, i rysował
           // go jak pudełko S/M/L – czarna deska wystająca spod frontu, zgłoszenie użytkownika)
-          const boxRx = fw === "xl" ? R`^01\. drawers/[^/]+/xl${d}/boxes/xl${d} box 1f\.stl$` : R`^01\. drawers/[^/]+/${fw}${d}/boxes/${fw}${d} box ${h}f\.stl$`;
+          const boxRx = fw === "xl" ? R`^01\. drawers/[^/]+/xl${d}/boxes/xl${d} box 1f\.stl$` : drawerBoxRx(fw, d, h);
           const boxCfg = fw === "xl" ? CF.boxXL : CF.box;
           // dno pudełka 9,8 mm nad spodem poziomu (z prowadnic: środek prowadnicy 28,3 mm nad spodem modułu, szczelina na
           // ślizg w ścianie pudełka 13,5–23,5 mm nad jego dnem), czyli fy0 + 4,8
@@ -971,7 +971,7 @@ function vizStack(m, S, st, si, x0, P) {
             // otwarcia, ślizg z pudełkiem. Tylko nowa biblioteka (1 sztuka w pliku); XL ma inne prowadnice – pominięte.
             if (fw !== "xl") {
               const gy = fy0 + 23.3, gxf = { t: [0, 0, bxf.t[2] * 0.65] };
-              const guideRx = R`^01\. drawers/07\. universal/runners/x${d} runner guide\.stl$`, slideRx = R`^01\. drawers/07\. universal/runners/x${d} runner slide\.stl$`;
+              const guideRx = R`^01\. drawers/07\. universal${RUN}x${d} runner guide\.stl$`, slideRx = R`^01\. drawers/07\. universal${RUN}x${d} runner slide\.stl$`;
               for (const [wall, s] of [[ca, 1], [cb, -1]]) {
                 const cfg = s > 0 ? CF.runL : CF.runR, xs = (p, q) => [Math.min(wall + s * p, wall + s * q), Math.max(wall + s * p, wall + s * q)];
                 let [g0, g1] = xs(3.1, 12.5);  // ściana modułu 3,1 mm, prowadnica 9,4
@@ -1007,7 +1007,7 @@ function vizStack(m, S, st, si, x0, P) {
         reach = Math.max(reach, Math.sin(o * 1.5) * (fy1 - fy0));
         const col = id === S.hover ? P.hover(P.sust) : P.sust, fw = fams[ci].toLowerCase();
         przod();
-        const facRx = fw === "xl" ? R`^02\. sustainers/04\. xl families/xl1f facade\.stl$` : R`^02\. sustainers/[^/]+/facades/${fw}${h}f facade\.stl$`;
+        const facRx = fw === "xl" ? R`^02\. sustainers/04\. xl families/xl1f facade\.stl$` : R`^02\. sustainers/[^/]+/facades/${fw}${h}f facade(_sustainer)?\.stl$`;
         const fr = stl(facRx, CF.fac, [ca, fy0, 0], [cb, fy1, 10], col, xf);
         const lockRx = R`^02\. sustainers/05\. universal/locks/lock outer part ${h === 1 ? "1f" : "2-4f"}\.stl$`;
         // etykieta: front 1F – krótka „Label for Sustainers”, 2F i 4F – wnęka jak w szufladach, więc Label.stl
@@ -1039,7 +1039,7 @@ function vizStack(m, S, st, si, x0, P) {
   // dach (tylko nad szufladami) – kształty jak na stronie „Roof Types”
   const top = st.layers[st.layers.length - 1];
   const roofReal = top && top.type === "D" && st.roof !== "none" && (() => {
-    const cut = st.roof === "heavy" && fam === "XL" && vizStlFile(R`^01\. drawers/[^/]+/xl${d}/roofs/xl${d} heavyweight roof cut\.stl$`);
+    const cut = st.roof === "heavy" && fam === "XL" && vizStlFile(heavyCutRx(d));
     const r = stl(cut || R`^01\. drawers/[^/]+/${w}${d}/roofs/${w}${d} ${ROOF_FILE[st.roof]} roof\.stl$`, CF.roofUp, [x0, y, -D], [x1, y, 0], roofCol);  // Heavyweight też (listwy 4,8 mm po tej samej stronie pliku co w Table – pomiar 2026-11-02)
     // Heavyweight: rączka (rurka Ø 30 × 156,5 mm, w pliku długość wzdłuż Y) między koszami – końce w gniazdach ścianek koszy
     // (Y 44,7–74,9 mm nad spodem dachu, okrągły koniec gniazda na środku głębokości; L4, L6, XL5 Cut – pomiar 2026-11-02)

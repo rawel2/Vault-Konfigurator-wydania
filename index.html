@@ -540,7 +540,7 @@ td.est.geom { color: var(--muted); }
   <a href="https://github.com/rawel2/Vault-Konfigurator-wydania/releases/latest" target="_blank" rel="noopener" data-tr>Instrukcja i aktualizacje</a>
 </footer>
 
-<script>window.VAULT_WEB = {"wersja": "1.1.43", "commit": "ab7932c"};</script>
+<script>window.VAULT_WEB = {"wersja": "1.1.44", "commit": "76b0b19"};</script>
 <script>
   // pliki z danymi zmieniają się po skanowaniu – wczytuj je zawsze świeże (bez pamięci podręcznej przeglądarki)
   for (const f of ["katalog.js", "dane_druku.js", "drukarki.js", "tlumaczenia.js"])
@@ -663,14 +663,19 @@ const HW_REFS = {
 const castersOn = md => !!(md.base && md.casters && !md.wheels && !md.feet);
 const partRefs = file => (DOC_REFS.find(([rx]) => rx.test(norm(file))) || [null, []])[1];
 // odnośniki „instr. 02, s. 7” – PDF z biblioteki otwarty na stronie (#page); brak pliku instrukcji – bez odnośnika
+const MANUAL_OFFSET = { "01": 1, "02": 23, "03": 31, "04": 38, "05": 55 };  // np. Drawer Assembly 1/8 = s. 24
 function docLinks(refs) {
   if (WEB) return null;  // PDF-y instrukcji są w bibliotece użytkownika, nie na stronie
   const seen = new Set(), kids = [];
   for (const [n, pg] of refs) {
-    const k = n + ":" + pg, d = DOCS.find(x => x.split("/").pop().startsWith(n + "_"));
+    let k = n + ":" + pg, d = DOCS.find(x => x.split("/").pop().startsWith(n + "_")), p = pg;
+    // paczka z 18.11.2026: jedna „Instructions Manual_14.11.26.pdf” = pięć dawnych po kolei (z miniatur stron)
+    const one = !d && DOCS.find(x => /^instructions manual_[\d.]+\.pdf$/i.test(x.split("/").pop()));
+    if (one) { d = one; p = pg + MANUAL_OFFSET[n]; }
     if (seen.has(k) || !d) continue;
     seen.add(k);
-    kids.push(el("a", { href: fileUrl(d) + "#page=" + pg, target: "_blank", title: d.split("/").pop() + " – " + tr("strona {p}", { p: pg }) }, tr("instr. {n}, s. {p}", { n, p: pg })));
+    kids.push(el("a", { href: fileUrl(d) + "#page=" + p, target: "_blank", title: d.split("/").pop() + " – " + tr("strona {p}", { p }) },
+      one ? tr("instrukcja, s. {p}", { p }) : tr("instr. {n}, s. {p}", { n, p })));
   }
   return kids.length ? el("div", { class: "refs" }, kids) : null;
 }
@@ -691,6 +696,16 @@ const norm = p => p.toLowerCase().replace(/['’]/g, "").replace(/\s+/g, " ").re
 const CATALOG = FILES.map(p => ({ p, n: norm(p) }));
 const findAll = rx => CATALOG.filter(f => rx.test(f.n)).map(f => f.p);
 const R = (strings, ...vals) => new RegExp(String.raw(strings, ...vals));
+// Wersje biblioteki USSA: vault2 (21.10.2026) i paczka z 18.11.2026 („Updates & Fixes” w Instructions Manual_14.11.26.pdf).
+// Od 18.11: prowadnice i ślizgi S–L w podfolderze „S-M-L Runners”, obok starych pudełek nowe „… Box 1F Upd.stl”
+// (wg USSA grubsze podpory ręczne i usunięte otwory – siatka otworów na piny przegródek w dnie została; bierzemy Upd), skrzynki M „M3 1F Module_Sustainer.stl”, „M2F Facade_Sustainer.stl”.
+const RUN = String.raw`/runners/(s-m-l runners/)?`;
+function drawerBoxRx(w, d, h) {
+  const upd = R`^01\. drawers/[^/]+/${w}${d}/boxes/${w}${d} box ${h}f upd\.stl$`;
+  return findAll(upd).length ? upd : R`^01\. drawers/[^/]+/${w}${d}/boxes/${w}${d} box ${h}f\.stl$`;
+}
+// Heavyweight XL przycięty do stołu: „XL3 Heavyweight Roof Cut.stl” (21.10), „XL3 Heawyweight Roof (Cut to fit on a plate).stl” (18.11)
+const heavyCutRx = d => R`^01\. drawers/[^/]+/xl${d}/roofs/xl${d} hea[vw]yweight roof (cut|\(cut to fit on a plate\))\.stl$`;
 
 // ---------- Szacunek druku ----------
 const GEOM = window.VAULT_GEOM || {};
@@ -967,7 +982,13 @@ function addDrawer(b, m, fam, d, h, multiBox, where, k = 0) {
   const gb = boxGen(fam, d, h, insOf(where, k));
   if (fam === "XL") b.add(G, "XL{d} pudełko", R`^01\. drawers/[^/]+/xl${d}/boxes/[^/]+\.stl$`, m, { all: true, v });
   else if (gb) b.addGen(G, tr(gb.plyta ? "{fam}{d} pudełko {h}F z płytą gridfinity w dnie" : "{fam}{d} pudełko {h}F bez otworów na piny", v), boxGenFile(gb), m, gb);
-  else b.add(G, "{fam}{d} pudełko {h}F", R`^01\. drawers/[^/]+/${w}${d}/boxes/${w}${d} box ${h}f\.stl$`, m, { v });
+  else b.add(G, "{fam}{d} pudełko {h}F", drawerBoxRx(w, d, h), m, { v });
+  // pudełka XL6/XL7 z dwóch części (Part 1/2); od 18.11 łączniki XL Box Connector Short/Tall – instrukcja nie podaje ilości
+  const XLC = R`^01\. drawers/07\. universal/runners/xl box connector short\.stl$`;  // brak w starszych bibliotekach
+  if (fam === "XL" && findAll(XLC).length && findAll(R`^01\. drawers/[^/]+/xl${d}/boxes/xl${d} box 1f part \d\.stl$`).length) {
+    b.add(G, "łącznik pudełka XL (niski)", XLC, 2 * m, { note: WERYF });
+    b.add(G, "łącznik pudełka XL (wysoki)", R`^01\. drawers/07\. universal/runners/xl box connector tall\.stl$`, 2 * m, { note: WERYF });
+  }
   if (fam === "XL") b.add(G, "XL front 1F", R`^01\. drawers/05\. xl families/xl facade 1f\.stl$`, m);
   else b.add(G, "{fam} front {h}F", R`^01\. drawers/[^/]+/facades/${w}${h}f \(turn on supports\)\.stl$`, m, { note: PODPORY, v });
   // Prowadnice i ślizgi – dwie wersje biblioteki USSA:
@@ -975,7 +996,7 @@ function addDrawer(b, m, fam, d, h, multiBox, where, k = 0) {
   //  nowa (X 2026): „x3 Runner Guide.stl”, „XL Runners/x3 Runner Guide XL.stl” – 1 sztuka w pliku → 2 pliki na szufladę.
   const run = fam === "XL" ? "xl" + d : "x" + d;
   const runner = kind => {  // -> [wzorzec, ilość, opcje] dla wersji biblioteki, która jest na dysku
-    const nowa = fam === "XL" ? R`/runners/xl runners/x${d} runner ${kind} xl\.stl$` : R`/runners/x${d} runner ${kind}\.stl$`;
+    const nowa = fam === "XL" ? R`/runners/xl runners/x${d} runner ${kind} xl\.stl$` : R`${RUN}x${d} runner ${kind}\.stl$`;
     return findAll(nowa).length ? [nowa, 2 * m, { v: { run } }] : [R`/runners/${run} runner ${kind}s\.stl$`, m, { note: DWIE, v: { run } }];
   };
   b.add(G, "prowadnice {run}", ...runner("guide"));
@@ -1042,7 +1063,7 @@ function divMax(fam, d, sInt, k) {
 function addSustainer(b, m, fam, d, h, col) {
   const w = fam.toLowerCase(), G = "Skrzynki", v = { fam, d, h, int: col.sInt };
   if (fam === "S" || fam === "M")
-    b.add(G, "{fam}{d} skrzynka {h}F", R`^02\. sustainers/[^/]+/${w}${d}/modules/${w}${d} ${h}f module\.stl$`, m, { v });
+    b.add(G, "{fam}{d} skrzynka {h}F", R`^02\. sustainers/[^/]+/${w}${d}/modules/${w}${d} ${h}f module(_sustainer)?\.stl$`, m, { v });
   else
     b.add(G, "{fam}{d} skrzynka {h}F {int}", R`^02\. sustainers/[^/]+/${w}${d}/modules/${w}${d} ${h}f ${col.sInt} module\.stl$`, m, { v });
   // spód modułu skrzynki ma gniazda na zatrzask jak moduł szuflad – S i M jedno, L i XL dwa (mapy spodów S4, M4, L4, XL4,
@@ -1053,7 +1074,7 @@ function addSustainer(b, m, fam, d, h, col) {
     b.add(G, "łącznik dzielonego wieka", R`^02\. sustainers/[^/]+/${w}${d}/roofs?/connector for split roof\.stl$`, m, { note: "ilość do weryfikacji" });
   } else b.add(G, "{fam}{d} wieko", R`^02\. sustainers/[^/]+/${w}${d}/roofs?/${w}${d} roof( whole)?\.stl$`, m, { v });
   if (fam === "XL") b.add(G, "XL front 1F", R`^02\. sustainers/04\. xl families/xl1f facade\.stl$`, m);
-  else b.add(G, "{fam} front {h}F", R`^02\. sustainers/[^/]+/facades/${w}${h}f facade\.stl$`, m, { v });
+  else b.add(G, "{fam} front {h}F", R`^02\. sustainers/[^/]+/facades/${w}${h}f facade(_sustainer)?\.stl$`, m, { v });
   const U = "^02\\. sustainers/05\\. universal/";
   const hinge = fam === "S" || fam === "M" ? (h === 1 ? "s-m 1f hinge" : "s-m 2-4f hinge") : (h === 1 ? "l-xl 1f hinge" : "l 2-4f hinge");
   b.add(G, "zawias dolny", new RegExp(U + "hinges/" + hinge + "\\.stl$"), m, { note: "plik = 2 szt." });
@@ -1136,13 +1157,14 @@ function addDrawerModule(b, m, l, d) {
     { note: "po 1 w każdej szczelinie ściany modułu: 2 na każde F (L² i XL² – 3)" });
 }
 
+const TOP_TALL = R`^01\. drawers/07\. universal/top handle taller \(turn on supports\)\.stl$`;  // od 18.11.2026
 function addRoof(b, st, m) {
   const d = st.depth, W = baseWidth(st), w = W.toLowerCase();
   const top = st.layers[st.layers.length - 1];
   if (!top || top.type !== "D" || st.roof === "none") return;
   const G = "Dachy";
   // Heavyweight XL: nowa biblioteka ma wersję „Cut” 337 × 320 mm (pełna ma 366 × 348 mm i nie mieści się na stołach ~350 × 320)
-  const cut = st.roof === "heavy" && W === "XL" ? R`^01\. drawers/[^/]+/xl${d}/roofs/xl${d} heavyweight roof cut\.stl$` : null;
+  const cut = st.roof === "heavy" && W === "XL" ? heavyCutRx(d) : null;
   if (cut && findAll(cut).length) b.add(G, "{W}{d} dach {roof}", cut, m, { note: "wersja Cut 337 × 320 mm – mieści się na stole ok. 350 × 320 mm", v: { W, d, roof: tr(ROOFS[st.roof]) } });
   else b.add(G, "{W}{d} dach {roof}", R`^01\. drawers/[^/]+/${w}${d}/roofs/${w}${d} ${ROOF_FILE[st.roof]} roof\.stl$`, m, { v: { W, d, roof: tr(ROOFS[st.roof]) } });
   // spód każdego dachu szuflad ma gniazda na zatrzask jak spód modułu – S i M jedno, L i XL dwa (mapy spodów Grid, Table,
@@ -1154,7 +1176,9 @@ function addRoof(b, st, m) {
   }
   if (st.roof === "under") b.hwAdd("Wkręty do blatu", m, "ilość wg otworów w dachu – sprawdź");
   if (st.topHandle && st.roof === "grid") {  // tylko dach Grid (patrz formularz „Góra”)
-    b.add(G, "uchwyt górny", R`^01\. drawers/07\. universal/top handle \(turn on supports\)\.stl$`, m, { note: "drukować z podporami" });
+    const tall = st.topTall && findAll(TOP_TALL).length;
+    if (tall) b.add(G, "uchwyt górny wyższy", TOP_TALL, m, { note: "drukować z podporami" });
+    else b.add(G, "uchwyt górny", R`^01\. drawers/07\. universal/top handle \(turn on supports\)\.stl$`, m, { note: "drukować z podporami" });
     b.hwAdd(HW.m6_50, 2 * m, "uchwyt górny");
   }
 }
@@ -1253,7 +1277,19 @@ function addHandleStatic(b, st, m) {
 function addHandlePull(b, st, m) {
   const md = st.mods, G = "Modyfikacje", W = baseWidth(st), w = W.toLowerCase(), vw = { W, d: st.depth };
   if (!pullOn(st)) return;
-  b.add(G, "{W} uchwyt wysuwany", new RegExp(MOD_DIR + `pull-out handle/${w} pull-out handle\\.stl$`), m, { v: vw });
+  // od 18.11.2026 nowa konstrukcja (Modifications 14/15): S/M – rączka (Part 1) i płytka (Part 2) przykręcana na wkładkach,
+  // L/XL – belka z boczną nakładką (Front Cover) z każdej strony i dwoma zaślepkami na górze (Top Covers, 2 w pliku);
+  // L/XL w dwóch wersjach – z wkładkami gwintowanymi (jak w instrukcji) albo bez. Stare pliki w „Pull-out Handle/Archive”.
+  const PH = MOD_DIR + "pull-out handle/";
+  if (findAll(new RegExp(PH + `${w} pull-out handle part 1\\.stl$`)).length) {
+    b.add(G, "{W} uchwyt wysuwany cz. 1", new RegExp(PH + `${w} pull-out handle part 1\\.stl$`), m, { v: vw });
+    b.add(G, "{W} uchwyt wysuwany cz. 2", new RegExp(PH + `${w} pull-out handle part 2\\.stl$`), m, { v: vw });
+  } else if (findAll(new RegExp(PH + `${w} pull-out handle \\(with heat inserts\\)\\.stl$`)).length) {
+    b.add(G, "{W} uchwyt wysuwany", new RegExp(PH + `${w} pull-out handle \\(with heat inserts\\)\\.stl$`), m,
+      { note: "wersja z wkładkami gwintowanymi; bez wkładek – plik „(No Heat Inserts)”", v: vw });
+    b.add(G, "nakładka boczna uchwytu wysuwanego", new RegExp(PH + "pull-out handle front cover\\.stl$"), 2 * m);
+    b.add(G, "zaślepki górne uchwytu wysuwanego", new RegExp(PH + "pull-out handle top covers\\.stl$"), m, { note: "plik = 2 szt." });
+  } else b.add(G, "{W} uchwyt wysuwany", new RegExp(PH + `${w} pull-out handle\\.stl$`), m, { v: vw });
   if (md.backbone === "uni") b.add(G, "blokada uchwytu (uniwersalna)", new RegExp(MOD_DIR + "backbone/universal pull-out handle lock\\.stl$"), 2 * m, { note: WERYF });
   else {
     b.add(G, "{W} blokada uchwytu", new RegExp(MOD_DIR + `backbone/${w} pull-out handle lock\\.stl$`), m, { v: vw });
@@ -1539,7 +1575,9 @@ function renderEditor() {
       // uchwyt górny tylko z dachem Grid (podstawa 37,1 × 126 mm wchodzi w rząd 3 kratek; inne dachy nie mają kratek ani
       // otworów – instrukcja 01 s. 10, pomiar 2026-11-02); inny dach – wyszarzony, zapisany wybór czeka (jak koła bez podstawy)
       el("span", { title: st.roof === "grid" ? "" : tr("Uchwyt górny wchodzi w kratki dachu Grid – wybierz dach Grid.") },
-        chk(st.roof === "grid" && st.topHandle, tr("uchwyt górny (Top Handle)"), v => { st.topHandle = v; update(); }, st.roof !== "grid"))));
+        chk(st.roof === "grid" && st.topHandle, tr("uchwyt górny (Top Handle)"), v => { st.topHandle = v; update(); }, st.roof !== "grid"),
+        // wyższy uchwyt (Top Handle Taller) – od paczki USSA z 18.11.2026
+        findAll(TOP_TALL).length ? chk(st.roof === "grid" && st.topHandle && st.topTall, tr("wyższy (Taller)"), v => { st.topTall = v; update(); }, st.roof !== "grid" || !st.topHandle) : null)));
   } else ed.append(el("p", { class: "hint" }, tr("Górna warstwa to skrzynka – jej wieko zamyka wieżę, dach szuflad nie jest potrzebny.")));
 
   const md = st.mods, setm = k => v => { md[k] = v; update(); };
