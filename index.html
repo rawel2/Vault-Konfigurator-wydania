@@ -540,7 +540,7 @@ td.est.geom { color: var(--muted); }
   <a href="https://github.com/rawel2/Vault-Konfigurator-wydania/releases/latest" target="_blank" rel="noopener" data-tr>Instrukcja i aktualizacje</a>
 </footer>
 
-<script>window.VAULT_WEB = {"wersja": "1.1.44", "commit": "76b0b19"};</script>
+<script>window.VAULT_WEB = {"wersja": "1.1.45", "commit": "f60720a"};</script>
 <script>
   // pliki z danymi zmieniają się po skanowaniu – wczytuj je zawsze świeże (bez pamięci podręcznej przeglądarki)
   for (const f of ["katalog.js", "dane_druku.js", "drukarki.js", "tlumaczenia.js"])
@@ -2180,8 +2180,16 @@ function renderLibrary() {
       try { await api("/api/ustawienia", { biblioteka }); SERVER.reloadAfterScan = true; SERVER.status = { running: true, kind: "skan", step: "start" }; renderLibrary(); pollJob(); }
       catch (e) { alert(e.message); }
     };
-    out.push(inp, el("div", { class: "row", style: "margin-top:6px" },
-      el("button", { disabled: busy, onclick: () => scan(inp.value) }, samePath(inp.value, s.biblioteka) ? tr("Przeskanuj") : tr("Zmień i przeskanuj")),
+    const scanBtn = el("button", { disabled: busy, onclick: () => scan(inp.value) }, samePath(inp.value, s.biblioteka) ? tr("Przeskanuj") : tr("Zmień i przeskanuj"));
+    const scanLabel = () => { scanBtn.textContent = samePath(inp.value, s.biblioteka) ? tr("Przeskanuj") : tr("Zmień i przeskanuj"); };
+    inp.addEventListener("input", scanLabel);
+    // okno wyboru folderu jak przy folderze wyników (2026-11-24, zgłoszenie użytkownika: „nie ma przycisku Wybierz folder dla biblioteki”)
+    const pickLib = async () => {
+      try { const r = await api("/api/wybierz_katalog", {}); if (r.path) { inp.value = r.path; scanLabel(); } }
+      catch (e) { alert(e.message); }
+    };
+    out.push(inp, el("div", { class: "row", style: "margin-top:6px" }, scanBtn,
+      SERVER.wybor ? el("button", { class: "small", disabled: busy, onclick: pickLib }, tr("Wybierz folder…")) : null,
       SERVER.otworz ? el("button", { class: "small", onclick: () => api("/api/otworz", { co: "biblioteka" }).catch(e => alert(e.message)) }, tr("Otwórz")) : null));
     if (busy && st.kind === "skan") out.push(el("p", { class: "hint" }, "⏳ ", st.step || "", el("br"), tr("Nowe pliki: ok. 2–3 min na 20 GB; znane pliki są pomijane.")));
     if (!busy && st.kind === "skan" && st.error) out.push(el("p", { class: "err" }, tr("Błąd skanowania:") + " " + st.error));
